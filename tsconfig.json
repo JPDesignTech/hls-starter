@@ -23,5 +23,13 @@
     }
   },
   "include": ["next-env.d.ts", "**/*.ts", "**/*.tsx", ".next/types/**/*.ts"],
-  "exclude": ["node_modules"]
+  "exclude": [
+    "node_modules",
+    "uploads",
+    "output",
+    "public/streams",
+    "**/*.js",
+    "**/segment_*.ts",
+    "**/playlist.m3u8"
+  ]
 }

@@ -1,53 +1,36 @@
 'use client';
 
 import Link from 'next/link';
-import { useEffect, useState } from 'react';
-import { usePathname } from 'next/navigation';
-import { rootDomain, protocol } from '@/lib/utils';
+import { Zap } from 'lucide-react';
 
 export default function NotFound() {
-  const [subdomain, setSubdomain] = useState<string | null>(null);
-  const pathname = usePathname();
-
-  useEffect(() => {
-    // Extract subdomain from URL if we're on a subdomain page
-    if (pathname?.startsWith('/subdomain/')) {
-      const extractedSubdomain = pathname.split('/')[2];
-      if (extractedSubdomain) {
-        setSubdomain(extractedSubdomain);
-      }
-    } else {
-      // Try to extract from hostname for direct subdomain access
-      const hostname = window.location.hostname;
-      if (hostname.includes(`.${rootDomain.split(':')[0]}`)) {
-        const extractedSubdomain = hostname.split('.')[0];
-        setSubdomain(extractedSubdomain);
-      }
-    }
-  }, [pathname]);
-
   return (
-    <div className="flex min-h-screen flex-col items-center justify-center bg-gradient-to-b from-blue-50 to-white p-4">
-      <div className="text-center">
-        <h1 className="text-4xl font-bold tracking-tight text-gray-900">
-          {subdomain ? (
-            <>
-              <span className="text-blue-600">{subdomain}</span>.{rootDomain}{' '}
-              doesn't exist
-            </>
-          ) : (
-            'Subdomain Not Found'
-          )}
-        </h1>
-        <p className="mt-3 text-lg text-gray-600">
-          This subdomain hasn't been created yet.
-        </p>
-        <div className="mt-6">
+    <div className="min-h-screen bg-gradient-to-br from-gray-900 via-purple-900 to-violet-900 animate-gradient">
+      <div className="fixed inset-0 bg-gradient-to-t from-black/50 via-transparent to-transparent pointer-events-none" />
+      
+      <div className="relative flex min-h-screen flex-col items-center justify-center p-4">
+        <div className="text-center">
+          <div className="inline-flex items-center justify-center space-x-2 mb-6">
+            <Zap className="h-12 w-12 text-yellow-400" />
+            <h1 className="text-5xl font-bold text-white">
+              BeemMeUp
+            </h1>
+          </div>
+          
+          <h2 className="text-3xl font-semibold text-white mb-4">
+            404 - Page Not Found
+          </h2>
+          
+          <p className="text-lg text-gray-300 mb-8 max-w-md mx-auto">
+            Looks like this page got lost in the stream! Let's get you back on track.
+          </p>
+          
           <Link
-            href={`${protocol}://${rootDomain}`}
-            className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
+            href="/"
+            className="inline-flex items-center gap-2 rounded-lg bg-gradient-to-r from-purple-600 to-pink-600 px-6 py-3 text-sm font-medium text-white hover:from-purple-700 hover:to-pink-700 transition-colors"
           >
-            {subdomain ? `Create ${subdomain}` : `Go to ${rootDomain}`}
+            <Zap className="h-4 w-4" />
+            Back to BeemMeUp
           </Link>
         </div>
       </div>

@@ -1,25 +1,23 @@
 import type { Metadata } from 'next';
-import { Geist } from 'next/font/google';
+import { Inter } from 'next/font/google';
 import './globals.css';
 
-const geistSans = Geist({
-  variable: '--font-geist-sans',
-  subsets: ['latin']
-});
+const inter = Inter({ subsets: ['latin'] });
 
 export const metadata: Metadata = {
-  title: 'Platforms Starter Kit',
-  description: 'Next.js template for building a multi-tenant SaaS.'
+  title: 'BeemMeUp - Lightning Fast HLS Video Streaming',
+  description: 'Transform your videos into adaptive HLS streams with BeemMeUp. Upload once, stream everywhere with multiple quality levels.',
+  keywords: 'HLS, video streaming, adaptive bitrate, video upload, transcoding',
 };
 
 export default function RootLayout({
-  children
-}: Readonly<{
+  children,
+}: {
   children: React.ReactNode;
-}>) {
+}) {
   return (
     <html lang="en">
-      <body className={`${geistSans.variable} antialiased`}>{children}</body>
+      <body className={inter.className}>{children}</body>
     </html>
   );
 }
