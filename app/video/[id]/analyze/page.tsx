@@ -1,10 +1,10 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { useParams } from 'next/navigation';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { ArrowLeft, FileVideo, List, Clock, HardDrive, Zap, FileText, Play, Download, ExternalLink, Loader2 } from 'lucide-react';
+import { ArrowLeft, FileVideo, List, Clock, HardDrive, Zap, FileText, Play, Download, ExternalLink, Loader2, Pause, SkipForward, SkipBack } from 'lucide-react';
 import Link from 'next/link';
 
 interface VideoMetadata {
@@ -49,6 +49,14 @@ interface ParsedManifest {
   }>;
 }
 
+// Import HLS.js dynamically to avoid SSR issues
+let Hls: any = null;
+if (typeof window !== 'undefined') {
+  import('hls.js').then((module) => {
+    Hls = module.default;
+  });
+}
+
 export default function VideoAnalyzePage() {
   const params = useParams();
   const videoId = params.id as string;
@@ -59,6 +67,12 @@ export default function VideoAnalyzePage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [selectedSegment, setSelectedSegment] = useState<Segment | null>(null);
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [currentTime, setCurrentTime] = useState(0);
+  const [duration, setDuration] = useState(0);
+  const [currentSegmentIndex, setCurrentSegmentIndex] = useState<number | null>(null);
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const hlsRef = useRef<any>(null);
 
   // Fetch video metadata
   useEffect(() => {
@@ -266,6 +280,148 @@ export default function VideoAnalyzePage() {
     }
   };
 
+  // Initialize HLS player when a playlist is selected
+  useEffect(() => {
+    if (!selectedManifest || !videoRef.current || !Hls || !selectedManifest.endsWith('.m3u8')) return;
+
+    const video = videoRef.current;
+    
+    // Only load quality-specific playlists, not the master
+    const isQualityPlaylist = selectedManifest.includes('hls-') && !selectedManifest.includes('master');
+    if (!isQualityPlaylist && videoData?.url) {
+      // If master playlist is selected, try to auto-select first quality
+      return;
+    }
+    
+    if (Hls.isSupported()) {
+      // Destroy existing instance
+      if (hlsRef.current) {
+        hlsRef.current.destroy();
+      }
+      
+      const hls = new Hls({
+        debug: false,
+        enableWorker: true,
+        lowLatencyMode: false,
+      });
+      hlsRef.current = hls;
+      
+      hls.loadSource(selectedManifest);
+      hls.attachMedia(video);
+      
+      hls.on(Hls.Events.MANIFEST_PARSED, () => {
+        console.log('HLS manifest loaded for:', selectedManifest);
+        video.play().catch(e => console.log('Autoplay prevented:', e));
+      });
+
+      hls.on(Hls.Events.ERROR, (event: any, data: any) => {
+        if (data.fatal) {
+          console.error('Fatal HLS error:', data);
+          switch (data.type) {
+            case Hls.ErrorTypes.NETWORK_ERROR:
+              hls.startLoad();
+              break;
+            case Hls.ErrorTypes.MEDIA_ERROR:
+              hls.recoverMediaError();
+              break;
+            default:
+              hls.destroy();
+              break;
+          }
+        }
+      });
+
+      return () => {
+        hls.destroy();
+      };
+    } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
+      // For Safari native HLS support
+      video.src = selectedManifest;
+    }
+  }, [selectedManifest, Hls, videoData?.url]);
+
+  // Update current time and detect current segment
+  useEffect(() => {
+    if (!videoRef.current) return;
+
+    const video = videoRef.current;
+    
+    const updateTime = () => {
+      setCurrentTime(video.currentTime);
+      
+      // Find current segment based on time
+      if (parsedManifest?.segments) {
+        let accumulatedTime = 0;
+        for (let i = 0; i < parsedManifest.segments.length; i++) {
+          if (video.currentTime >= accumulatedTime && 
+              video.currentTime < accumulatedTime + parsedManifest.segments[i].duration) {
+            setCurrentSegmentIndex(i);
+            break;
+          }
+          accumulatedTime += parsedManifest.segments[i].duration;
+        }
+      }
+    };
+
+    const updateDuration = () => {
+      setDuration(video.duration);
+    };
+
+    const updatePlayState = () => {
+      setIsPlaying(!video.paused);
+    };
+
+    video.addEventListener('timeupdate', updateTime);
+    video.addEventListener('loadedmetadata', updateDuration);
+    video.addEventListener('play', updatePlayState);
+    video.addEventListener('pause', updatePlayState);
+
+    return () => {
+      video.removeEventListener('timeupdate', updateTime);
+      video.removeEventListener('loadedmetadata', updateDuration);
+      video.removeEventListener('play', updatePlayState);
+      video.removeEventListener('pause', updatePlayState);
+    };
+  }, [parsedManifest]);
+
+  // Jump to segment
+  const jumpToSegment = (segmentIndex: number) => {
+    if (!videoRef.current || !parsedManifest?.segments) return;
+    
+    let targetTime = 0;
+    for (let i = 0; i < segmentIndex; i++) {
+      targetTime += parsedManifest.segments[i].duration;
+    }
+    
+    videoRef.current.currentTime = targetTime;
+    setSelectedSegment(parsedManifest.segments[segmentIndex]);
+  };
+
+  // Playback controls
+  const togglePlayPause = () => {
+    if (!videoRef.current) return;
+    
+    if (videoRef.current.paused) {
+      videoRef.current.play();
+    } else {
+      videoRef.current.pause();
+    }
+  };
+
+  const skipToNextSegment = () => {
+    if (currentSegmentIndex !== null && parsedManifest?.segments) {
+      const nextIndex = Math.min(currentSegmentIndex + 1, parsedManifest.segments.length - 1);
+      jumpToSegment(nextIndex);
+    }
+  };
+
+  const skipToPreviousSegment = () => {
+    if (currentSegmentIndex !== null) {
+      const prevIndex = Math.max(currentSegmentIndex - 1, 0);
+      jumpToSegment(prevIndex);
+    }
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-gray-900 via-purple-900 to-violet-900 flex items-center justify-center">
@@ -313,6 +469,117 @@ export default function VideoAnalyzePage() {
             </Button>
           </Link>
         </div>
+
+        {/* Video Player */}
+        <Card className="bg-white/10 backdrop-blur-lg border-white/20 mb-6">
+          <CardHeader>
+            <CardTitle className="text-white flex items-center gap-2">
+              <Play className="h-5 w-5" />
+              HLS Stream Player
+            </CardTitle>
+            <CardDescription className="text-gray-300">
+              {selectedManifest ? `Playing: ${selectedManifest.split('/').pop()}` : 'Select a quality playlist to play'}
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-4">
+              {/* Video Element */}
+              <div className="relative bg-black rounded-lg overflow-hidden aspect-video">
+                <video
+                  ref={videoRef}
+                  className="w-full h-full"
+                  controls={false}
+                />
+                {currentSegmentIndex !== null && (
+                  <div className="absolute top-4 right-4 bg-black/70 text-white px-3 py-1 rounded text-sm">
+                    Segment #{currentSegmentIndex}
+                  </div>
+                )}
+              </div>
+
+              {/* Custom Controls */}
+              <div className="space-y-3">
+                {/* Progress Bar */}
+                <div className="bg-white/10 rounded-full h-2 relative cursor-pointer"
+                     onClick={(e) => {
+                       if (!videoRef.current) return;
+                       const rect = e.currentTarget.getBoundingClientRect();
+                       const x = e.clientX - rect.left;
+                       const percentage = x / rect.width;
+                       videoRef.current.currentTime = percentage * duration;
+                     }}>
+                  <div className="bg-purple-500 h-full rounded-full transition-all"
+                       style={{ width: `${(currentTime / duration) * 100}%` }} />
+                  {/* Segment markers */}
+                  {parsedManifest?.segments.map((segment, idx) => {
+                    const startPercent = (parsedManifest.segments
+                      .slice(0, idx)
+                      .reduce((acc, s) => acc + s.duration, 0) / parsedManifest.totalDuration) * 100;
+                    
+                    return (
+                      <div
+                        key={idx}
+                        className="absolute top-0 bottom-0 border-l border-white/20"
+                        style={{ left: `${startPercent}%` }}
+                      />
+                    );
+                  })}
+                </div>
+
+                {/* Time Display */}
+                <div className="flex justify-between text-sm text-gray-300">
+                  <span>{formatDuration(currentTime)}</span>
+                  <span>{formatDuration(duration)}</span>
+                </div>
+
+                {/* Control Buttons */}
+                <div className="flex items-center justify-center gap-4">
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    className="text-white hover:bg-white/20"
+                    onClick={skipToPreviousSegment}
+                    disabled={currentSegmentIndex === 0}
+                  >
+                    <SkipBack className="h-4 w-4" />
+                  </Button>
+                  
+                  <Button
+                    size="lg"
+                    className="bg-purple-600 hover:bg-purple-700 text-white"
+                    onClick={togglePlayPause}
+                  >
+                    {isPlaying ? (
+                      <Pause className="h-6 w-6" />
+                    ) : (
+                      <Play className="h-6 w-6" />
+                    )}
+                  </Button>
+                  
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    className="text-white hover:bg-white/20"
+                    onClick={skipToNextSegment}
+                    disabled={currentSegmentIndex === (parsedManifest?.segments.length || 0) - 1}
+                  >
+                    <SkipForward className="h-4 w-4" />
+                  </Button>
+                </div>
+
+                {/* Current Segment Info */}
+                {currentSegmentIndex !== null && parsedManifest?.segments[currentSegmentIndex] && (
+                  <div className="bg-white/5 rounded-lg p-3 text-sm">
+                    <p className="text-gray-400">Now Playing</p>
+                    <p className="text-white font-mono">
+                      Segment #{currentSegmentIndex} • {parsedManifest.segments[currentSegmentIndex].duration.toFixed(3)}s
+                    </p>
+                  </div>
+                )}
+              </div>
+            </div>
+          </CardContent>
+        </Card>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {/* File List */}
@@ -553,24 +820,34 @@ export default function VideoAnalyzePage() {
                                 return (
                                   <div
                                     key={segment.index}
-                                    className="absolute h-full transition-all cursor-pointer group hover:z-10"
+                                    className={`absolute h-full transition-all cursor-pointer group hover:z-10 ${
+                                      currentSegmentIndex === idx ? 'ring-2 ring-white z-20' : ''
+                                    }`}
                                     style={{
                                       left: `${startPercent}%`,
                                       width: `${widthPercent}%`,
                                       backgroundColor: color,
                                       borderRight: '1px solid rgba(0,0,0,0.3)',
-                                      opacity: 0.8,
+                                      opacity: currentSegmentIndex === idx ? 1 : 0.8,
                                     }}
                                     onMouseEnter={(e) => e.currentTarget.style.opacity = '1'}
-                                    onMouseLeave={(e) => e.currentTarget.style.opacity = '0.8'}
-                                    onClick={() => setSelectedSegment(segment)}
-                                    title={`Segment #${segment.index}: ${segment.duration.toFixed(3)}s`}
+                                    onMouseLeave={(e) => e.currentTarget.style.opacity = currentSegmentIndex === idx ? '1' : '0.8'}
+                                    onClick={() => {
+                                      setSelectedSegment(segment);
+                                      jumpToSegment(idx);
+                                    }}
+                                    title={`Segment #${segment.index}: ${segment.duration.toFixed(3)}s • Click to jump`}
                                   >
                                     <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
                                       <span className="text-xs text-white font-bold drop-shadow-lg">
                                         #{segment.index}
                                       </span>
                                     </div>
+                                    {currentSegmentIndex === idx && (
+                                      <div className="absolute -top-6 left-1/2 transform -translate-x-1/2 bg-white text-black px-2 py-1 rounded text-xs font-bold">
+                                        Playing
+                                      </div>
+                                    )}
                                   </div>
                                 );
                               })}
@@ -635,12 +912,19 @@ export default function VideoAnalyzePage() {
                           {/* Segment List */}
                           <div className="bg-black/30 rounded-lg p-4 max-h-64 overflow-y-auto">
                             <div className="space-y-1">
-                              {parsedManifest.segments.map((segment) => (
+                              {parsedManifest.segments.map((segment, idx) => (
                                 <div
                                   key={segment.index}
-                                  className="flex items-center gap-3 text-sm hover:bg-white/5 p-2 rounded"
+                                  className={`flex items-center gap-3 text-sm hover:bg-white/5 p-2 rounded cursor-pointer transition-colors ${
+                                    currentSegmentIndex === idx ? 'bg-purple-600/20 border-l-2 border-purple-500' : ''
+                                  }`}
+                                  onClick={() => {
+                                    setSelectedSegment(segment);
+                                    jumpToSegment(idx);
+                                  }}
+                                  title="Click to jump to this segment"
                                 >
-                                  <span className="text-gray-500 w-12">
+                                  <span className={`w-12 ${currentSegmentIndex === idx ? 'text-purple-300 font-bold' : 'text-gray-500'}`}>
                                     #{segment.index}
                                   </span>
                                   <Clock className="h-3 w-3 text-gray-400" />
@@ -650,6 +934,11 @@ export default function VideoAnalyzePage() {
                                   <span className="text-gray-300 truncate flex-1">
                                     {segment.uri}
                                   </span>
+                                  {currentSegmentIndex === idx && (
+                                    <span className="text-xs bg-purple-600/30 text-purple-300 px-2 py-1 rounded">
+                                      Playing
+                                    </span>
+                                  )}
                                 </div>
                               ))}
                             </div>

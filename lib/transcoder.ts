@@ -11,8 +11,19 @@ function getTranscoderClient() {
       config.projectId = process.env.GCP_PROJECT_ID;
     }
 
-    // Use credentials from environment if available
-    if (process.env.GCS_PRIVATE_KEY && process.env.GCS_CLIENT_EMAIL && process.env.GCP_PROJECT_ID) {
+    // For production (Vercel) - when GCP_SERVICE_ACCOUNT_KEY env var is set
+    if (process.env.GCP_SERVICE_ACCOUNT_KEY && process.env.GCP_SERVICE_ACCOUNT_KEY.trim() !== '') {
+      try {
+        // Only try to parse if it looks like JSON (starts with {)
+        if (process.env.GCP_SERVICE_ACCOUNT_KEY.trim().startsWith('{')) {
+          config.credentials = JSON.parse(process.env.GCP_SERVICE_ACCOUNT_KEY);
+          console.log('[Transcoder] Using credentials from GCP_SERVICE_ACCOUNT_KEY');
+        }
+      } catch (error) {
+        console.error('[Transcoder] Failed to parse GCP_SERVICE_ACCOUNT_KEY:', error);
+      }
+    } else if (process.env.GCS_PRIVATE_KEY && process.env.GCS_CLIENT_EMAIL && process.env.GCP_PROJECT_ID) {
+      // Fallback to individual credential fields
       config.credentials = {
         type: 'service_account',
         project_id: process.env.GCP_PROJECT_ID,
@@ -25,11 +36,15 @@ function getTranscoderClient() {
         auth_provider_x509_cert_url: 'https://www.googleapis.com/oauth2/v1/certs',
         client_x509_cert_url: `https://www.googleapis.com/robot/v1/metadata/x509/${encodeURIComponent(process.env.GCS_CLIENT_EMAIL)}`,
       };
+      console.log('[Transcoder] Using credentials from individual env vars');
     } else if (process.env.GOOGLE_APPLICATION_CREDENTIALS) {
       config.keyFilename = process.env.GOOGLE_APPLICATION_CREDENTIALS;
+      console.log('[Transcoder] Using credentials from file:', process.env.GOOGLE_APPLICATION_CREDENTIALS);
     }
 
     console.log('[Transcoder] Initializing client with project:', config.projectId);
+    console.log('[Transcoder] Has credentials:', !!config.credentials || !!config.keyFilename);
+    
     return new TranscoderServiceClient(config);
   } catch (error) {
     console.error('[Transcoder] Failed to initialize client:', error);
