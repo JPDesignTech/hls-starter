@@ -5,6 +5,10 @@ import { v4 as uuidv4 } from 'uuid';
 import { uploadDirectory, downloadFromGCS, isGoogleCloudStorageConfigured, getTempDir, uploadFile } from '@/lib/storage';
 import { kv } from '@/lib/redis';
 
+// Import static FFmpeg binaries for production use
+import ffmpegStatic from 'ffmpeg-static';
+const ffprobeStatic = require('ffprobe-static');
+
 // Ensure this route only runs on Node.js runtime
 export const runtime = 'nodejs';
 export const maxDuration = 300; // 5 minutes for video processing
@@ -73,6 +77,15 @@ function getDirectoryPaths() {
 // Get video metadata
 async function getVideoMetadata(inputPath: string): Promise<any> {
   const ffmpeg = (await import('fluent-ffmpeg')).default;
+  
+  // Configure ffmpeg to use static binaries
+  if (ffmpegStatic) {
+    ffmpeg.setFfmpegPath(ffmpegStatic);
+  }
+  if (ffprobeStatic.path) {
+    ffmpeg.setFfprobePath(ffprobeStatic.path);
+  }
+  
   return new Promise((resolve, reject) => {
     ffmpeg.ffprobe(inputPath, (err: any, metadata: any) => {
       if (err) reject(err);
@@ -108,6 +121,15 @@ async function transcodeVideo(options: {
   videoId: string;
 }) {
   const ffmpeg = (await import('fluent-ffmpeg')).default;
+  
+  // Configure ffmpeg to use static binaries
+  if (ffmpegStatic) {
+    ffmpeg.setFfmpegPath(ffmpegStatic);
+  }
+  if (ffprobeStatic.path) {
+    ffmpeg.setFfprobePath(ffprobeStatic.path);
+  }
+  
   const { inputPath, outputDir, videoId } = options;
   
   // Create output directory
@@ -233,6 +255,14 @@ export async function POST(request: NextRequest) {
     try {
       // Check if ffmpeg is available
       const ffmpeg = (await import('fluent-ffmpeg')).default;
+      
+      // Configure ffmpeg to use static binaries
+      if (ffmpegStatic) {
+        ffmpeg.setFfmpegPath(ffmpegStatic);
+      }
+      if (ffprobeStatic.path) {
+        ffmpeg.setFfprobePath(ffprobeStatic.path);
+      }
       
       // Try to get video metadata as a test
       await getVideoMetadata(inputPath);
