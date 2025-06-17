@@ -4,6 +4,7 @@ import React, { useState } from 'react';
 import { Progress } from './ui/progress';
 import { Button } from './ui/button';
 import { Card } from './ui/card';
+import { Loader2, CloudUpload } from 'lucide-react';
 
 interface UploadResponse {
   uploadUrl: string;
@@ -11,11 +12,16 @@ interface UploadResponse {
   filename: string;
 }
 
-export function DirectUpload() {
+interface DirectUploadProps {
+  onUploadComplete?: (videoId: string, filename: string) => void;
+  onVideoAdded?: (video: any) => void;
+  onVideoUpdated?: (videoId: string, updates: any) => void;
+}
+
+export function DirectUpload({ onUploadComplete, onVideoAdded, onVideoUpdated }: DirectUploadProps) {
   const [file, setFile] = useState<File | null>(null);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [uploading, setUploading] = useState(false);
-  const [videoId, setVideoId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -34,6 +40,8 @@ export function DirectUpload() {
     setUploading(true);
     setError(null);
 
+    let videoId: string | null = null;
+
     try {
       // Step 1: Get signed URL from your API
       const response = await fetch('/api/upload/signed-url', {
@@ -51,8 +59,18 @@ export function DirectUpload() {
         throw new Error('Failed to get upload URL');
       }
 
-      const { uploadUrl, videoId, filename }: UploadResponse = await response.json();
-      setVideoId(videoId);
+      const { uploadUrl, videoId: serverVideoId, filename }: UploadResponse = await response.json();
+      videoId = serverVideoId;
+
+      // Add video to parent's list with the real videoId
+      if (onVideoAdded) {
+        onVideoAdded({
+          id: videoId,
+          title: file.name,
+          status: 'uploading',
+          progress: 0,
+        });
+      }
 
       // Step 2: Upload directly to Google Cloud Storage
       const xhr = new XMLHttpRequest();
@@ -61,6 +79,11 @@ export function DirectUpload() {
         if (e.lengthComputable) {
           const percentComplete = (e.loaded / e.total) * 100;
           setUploadProgress(percentComplete);
+          
+          // Update parent's video progress
+          if (onVideoUpdated && videoId) {
+            onVideoUpdated(videoId, { progress: percentComplete * 0.5 }); // 50% for upload
+          }
         }
       });
 
@@ -81,13 +104,27 @@ export function DirectUpload() {
           });
 
           setUploadProgress(100);
-          alert(`Upload complete! Video ID: ${videoId}`);
+          setUploading(false);
+          
+          // Update parent's video status
+          if (onVideoUpdated && videoId) {
+            onVideoUpdated(videoId, { 
+              status: 'processing', 
+              progress: 50 
+            });
+          }
+          
+          // Notify parent of completion
+          if (onUploadComplete && videoId) {
+            onUploadComplete(videoId, filename);
+          }
         } else {
           throw new Error('Upload failed');
         }
       });
 
       xhr.addEventListener('error', () => {
+        setUploading(false);
         throw new Error('Upload failed');
       });
 
@@ -98,55 +135,68 @@ export function DirectUpload() {
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Upload failed');
       setUploading(false);
+      
+      // Update parent's video status to error
+      if (onVideoUpdated && videoId) {
+        onVideoUpdated(videoId, { 
+          status: 'error', 
+          error: err instanceof Error ? err.message : 'Upload failed' 
+        });
+      }
     }
   };
 
   return (
-    <Card className="p-6 max-w-md mx-auto">
-      <h2 className="text-2xl font-bold mb-4">Upload Video</h2>
-      
-      <div className="space-y-4">
-        <input
-          type="file"
-          accept="video/*"
-          onChange={handleFileSelect}
-          disabled={uploading}
-          className="w-full"
-        />
+    <div className="space-y-4">
+      <input
+        type="file"
+        accept="video/*"
+        onChange={handleFileSelect}
+        disabled={uploading}
+        className="w-full cursor-pointer bg-white/10 border-white/20 text-white file:bg-white/20 file:text-white file:border-0 hover:bg-white/20 transition-colors p-2 rounded-md"
+      />
 
-        {file && (
-          <div className="text-sm text-gray-600">
-            Selected: {file.name} ({(file.size / 1024 / 1024).toFixed(2)} MB)
+      {file && (
+        <div className="p-4 bg-white/10 rounded-lg border border-white/20">
+          <p className="text-sm font-medium text-white">{file.name}</p>
+          <p className="text-xs text-gray-300">
+            {(file.size / 1024 / 1024).toFixed(2)} MB
+          </p>
+        </div>
+      )}
+
+      {error && (
+        <div className="text-red-400 text-sm p-3 bg-red-500/20 rounded-lg border border-red-500/30">
+          {error}
+        </div>
+      )}
+
+      {uploading && (
+        <div className="space-y-2">
+          <Progress value={uploadProgress} className="w-full" />
+          <div className="text-sm text-gray-300 text-center">
+            {uploadProgress.toFixed(0)}% uploaded
           </div>
-        )}
+        </div>
+      )}
 
-        {error && (
-          <div className="text-red-500 text-sm">{error}</div>
+      <Button
+        onClick={uploadFile}
+        disabled={!file || uploading}
+        className="w-full bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white"
+      >
+        {uploading ? (
+          <>
+            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+            Uploading...
+          </>
+        ) : (
+          <>
+            <CloudUpload className="mr-2 h-4 w-4" />
+            Upload to Cloud Storage
+          </>
         )}
-
-        {uploading && (
-          <div className="space-y-2">
-            <Progress value={uploadProgress} className="w-full" />
-            <div className="text-sm text-gray-600 text-center">
-              {uploadProgress.toFixed(0)}% uploaded
-            </div>
-          </div>
-        )}
-
-        <Button
-          onClick={uploadFile}
-          disabled={!file || uploading}
-          className="w-full"
-        >
-          {uploading ? 'Uploading...' : 'Upload Video'}
-        </Button>
-
-        {videoId && (
-          <div className="text-green-600 text-sm">
-            Video uploaded successfully! ID: {videoId}
-          </div>
-        )}
-      </div>
-    </Card>
+      </Button>
+    </div>
   );
 } 

@@ -55,8 +55,9 @@ export async function uploadFile(options: UploadOptions): Promise<StorageFile> {
     },
   });
   
-  // Make file publicly accessible
-  await file.makePublic();
+  // Note: With uniform bucket-level access enabled, we cannot use makePublic()
+  // The bucket should be configured with proper IAM policies for public access
+  // await file.makePublic(); // Removed - incompatible with uniform bucket-level access
   
   const [metadata] = await file.getMetadata();
   

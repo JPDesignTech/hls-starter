@@ -199,54 +199,102 @@ export async function POST(request: NextRequest) {
       inputPath = path.join(uploadsDir, videoFile);
     }
 
-    const outputDir = path.join(process.cwd(), 'output', videoId);
+    try {
+      // Check if ffmpeg is available
+      const ffmpeg = (await import('fluent-ffmpeg')).default;
+      
+      // Try to get video metadata as a test
+      await getVideoMetadata(inputPath);
+      
+      const outputDir = path.join(process.cwd(), 'output', videoId);
 
-    // Transcode video to multiple qualities
-    const transcodeResult = await transcodeVideo({
-      inputPath,
-      outputDir,
-      videoId,
-    });
+      // Transcode video to multiple qualities
+      const transcodeResult = await transcodeVideo({
+        inputPath,
+        outputDir,
+        videoId,
+      });
 
-    // Upload to storage (Google Cloud Storage or local)
-    const uploadedFiles = await uploadDirectory(outputDir, videoId);
+      // Upload to storage (Google Cloud Storage or local)
+      const uploadedFiles = await uploadDirectory(outputDir, videoId);
 
-    // Get the master playlist URL
-    const masterPlaylistFile = uploadedFiles.find(f => f.name.includes('master.m3u8'));
-    
-    if (!masterPlaylistFile) {
-      throw new Error('Master playlist not found');
+      // Get the master playlist URL
+      const masterPlaylistFile = uploadedFiles.find(f => f.name.includes('master.m3u8'));
+      
+      if (!masterPlaylistFile) {
+        throw new Error('Master playlist not found');
+      }
+
+      // Store video metadata in Redis
+      await kv.set(`video:${videoId}`, {
+        id: videoId,
+        url: masterPlaylistFile.url,
+        qualities: transcodeResult.qualities,
+        processedAt: new Date().toISOString(),
+        files: uploadedFiles.map(f => ({
+          name: f.name,
+          url: f.url,
+          size: f.size,
+        })),
+      });
+
+      // Clean up local files
+      if (shouldCleanupInput) {
+        await fs.unlink(inputPath);
+      }
+      // Optionally clean up output directory after upload
+      // await fs.rm(outputDir, { recursive: true, force: true });
+
+      return NextResponse.json({
+        success: true,
+        url: masterPlaylistFile.url,
+        qualities: transcodeResult.qualities,
+      });
+    } catch (ffmpegError) {
+      console.error('Transcoding error:', ffmpegError);
+      console.log('Falling back to original video file...');
+      
+      // Fallback: serve the original video without transcoding
+      try {
+        // Copy original video to public directory
+        const publicDir = path.join(process.cwd(), 'public', 'streams', videoId);
+        await fs.mkdir(publicDir, { recursive: true });
+        
+        const videoFileName = path.basename(inputPath);
+        const publicVideoPath = path.join(publicDir, videoFileName);
+        await fs.copyFile(inputPath, publicVideoPath);
+        
+        const videoUrl = `/streams/${videoId}/${videoFileName}`;
+        
+        // Store video metadata in Redis
+        await kv.set(`video:${videoId}`, {
+          id: videoId,
+          url: videoUrl,
+          isOriginal: true,
+          processedAt: new Date().toISOString(),
+          error: 'Transcoding failed, serving original video',
+        });
+        
+        // Clean up local files
+        if (shouldCleanupInput) {
+          await fs.unlink(inputPath);
+        }
+        
+        return NextResponse.json({
+          success: true,
+          url: videoUrl,
+          isOriginal: true,
+          message: 'Serving original video (transcoding unavailable)',
+        });
+      } catch (fallbackError) {
+        console.error('Fallback error:', fallbackError);
+        throw fallbackError;
+      }
     }
-
-    // Store video metadata in Redis
-    await kv.set(`video:${videoId}`, {
-      id: videoId,
-      url: masterPlaylistFile.url,
-      qualities: transcodeResult.qualities,
-      processedAt: new Date().toISOString(),
-      files: uploadedFiles.map(f => ({
-        name: f.name,
-        url: f.url,
-        size: f.size,
-      })),
-    });
-
-    // Clean up local files
-    if (shouldCleanupInput) {
-      await fs.unlink(inputPath);
-    }
-    // Optionally clean up output directory after upload
-    // await fs.rm(outputDir, { recursive: true, force: true });
-
-    return NextResponse.json({
-      success: true,
-      url: masterPlaylistFile.url,
-      qualities: transcodeResult.qualities,
-    });
   } catch (error) {
     console.error('Processing error:', error);
     return NextResponse.json(
-      { error: 'Failed to process video' },
+      { error: error instanceof Error ? error.message : 'Failed to process video' },
       { status: 500 }
     );
   }

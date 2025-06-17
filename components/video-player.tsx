@@ -40,6 +40,18 @@ export function VideoPlayer({
     if (!videoRef.current || !src) return;
 
     const video = videoRef.current;
+    
+    // Check if this is an HLS stream
+    const isHLS = src.endsWith('.m3u8');
+    
+    if (!isHLS) {
+      // For regular video files, just set the source directly
+      video.src = src;
+      video.addEventListener('loadedmetadata', () => {
+        if (autoPlay) video.play();
+      });
+      return;
+    }
 
     // Native HLS support (Safari)
     if (video.canPlayType('application/vnd.apple.mpegurl')) {
