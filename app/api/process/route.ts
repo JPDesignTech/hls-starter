@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import path from 'path';
 import { promises as fs } from 'fs';
 import { v4 as uuidv4 } from 'uuid';
-import { uploadDirectory, downloadFromGCS, isGoogleCloudStorageConfigured } from '@/lib/storage';
+import { uploadDirectory, downloadFromGCS, isGoogleCloudStorageConfigured, getTempDir, uploadFile } from '@/lib/storage';
 import { kv } from '@/lib/redis';
 
 // Ensure this route only runs on Node.js runtime
@@ -48,6 +48,27 @@ const QUALITY_PRESETS = [
     bufsize: '1200k',
   },
 ];
+
+// Helper function to get appropriate directory paths for the environment
+function getDirectoryPaths() {
+  const isProduction = process.env.VERCEL === '1' || process.env.NODE_ENV === 'production';
+  
+  if (isProduction) {
+    // In production (Vercel), use /tmp which is the only writable directory
+    return {
+      uploadsDir: '/tmp/uploads',
+      outputBaseDir: '/tmp/output',
+      publicBaseDir: '/tmp/public/streams',
+    };
+  } else {
+    // In development, use local directories
+    return {
+      uploadsDir: path.join(process.cwd(), 'uploads'),
+      outputBaseDir: path.join(process.cwd(), 'output'),
+      publicBaseDir: path.join(process.cwd(), 'public', 'streams'),
+    };
+  }
+}
 
 // Get video metadata
 async function getVideoMetadata(inputPath: string): Promise<any> {
@@ -185,7 +206,10 @@ export async function POST(request: NextRequest) {
       shouldCleanupInput = true;
     } else {
       // Get video from local uploads directory
-      const uploadsDir = path.join(process.cwd(), 'uploads');
+      const { uploadsDir } = getDirectoryPaths();
+      
+      try {
+        await fs.mkdir(uploadsDir, { recursive: true });
       const files = await fs.readdir(uploadsDir);
       const videoFile = files.find((f: string) => f.startsWith(videoId));
 
@@ -197,6 +221,13 @@ export async function POST(request: NextRequest) {
       }
 
       inputPath = path.join(uploadsDir, videoFile);
+      } catch (err) {
+        console.error('Error reading uploads directory:', err);
+        return NextResponse.json(
+          { error: 'Video not found in uploads' },
+          { status: 404 }
+        );
+      }
     }
 
     try {
@@ -206,86 +237,126 @@ export async function POST(request: NextRequest) {
       // Try to get video metadata as a test
       await getVideoMetadata(inputPath);
       
-      const outputDir = path.join(process.cwd(), 'output', videoId);
+      const { outputBaseDir } = getDirectoryPaths();
+      const outputDir = path.join(outputBaseDir, videoId);
 
-      // Transcode video to multiple qualities
-      const transcodeResult = await transcodeVideo({
-        inputPath,
-        outputDir,
-        videoId,
-      });
+    // Transcode video to multiple qualities
+    const transcodeResult = await transcodeVideo({
+      inputPath,
+      outputDir,
+      videoId,
+    });
 
-      // Upload to storage (Google Cloud Storage or local)
-      const uploadedFiles = await uploadDirectory(outputDir, videoId);
+    // Upload to storage (Google Cloud Storage or local)
+    const uploadedFiles = await uploadDirectory(outputDir, videoId);
 
-      // Get the master playlist URL
-      const masterPlaylistFile = uploadedFiles.find(f => f.name.includes('master.m3u8'));
+    // Get the master playlist URL
+    const masterPlaylistFile = uploadedFiles.find(f => f.name.includes('master.m3u8'));
+    
+    if (!masterPlaylistFile) {
+      throw new Error('Master playlist not found');
+    }
+
+    // Store video metadata in Redis
+    await kv.set(`video:${videoId}`, {
+      id: videoId,
+      url: masterPlaylistFile.url,
+      qualities: transcodeResult.qualities,
+      processedAt: new Date().toISOString(),
+      files: uploadedFiles.map(f => ({
+        name: f.name,
+        url: f.url,
+        size: f.size,
+      })),
+    });
+
+    // Clean up local files
+    if (shouldCleanupInput) {
+      await fs.unlink(inputPath);
+    }
       
-      if (!masterPlaylistFile) {
-        throw new Error('Master playlist not found');
+      // Clean up output directory after upload in production
+      if (process.env.VERCEL) {
+        try {
+          await fs.rm(outputDir, { recursive: true, force: true });
+        } catch (err) {
+          console.error('Error cleaning up output directory:', err);
+        }
       }
 
-      // Store video metadata in Redis
-      await kv.set(`video:${videoId}`, {
-        id: videoId,
-        url: masterPlaylistFile.url,
-        qualities: transcodeResult.qualities,
-        processedAt: new Date().toISOString(),
-        files: uploadedFiles.map(f => ({
-          name: f.name,
-          url: f.url,
-          size: f.size,
-        })),
-      });
-
-      // Clean up local files
-      if (shouldCleanupInput) {
-        await fs.unlink(inputPath);
-      }
-      // Optionally clean up output directory after upload
-      // await fs.rm(outputDir, { recursive: true, force: true });
-
-      return NextResponse.json({
-        success: true,
-        url: masterPlaylistFile.url,
-        qualities: transcodeResult.qualities,
-      });
+    return NextResponse.json({
+      success: true,
+      url: masterPlaylistFile.url,
+      qualities: transcodeResult.qualities,
+    });
     } catch (ffmpegError) {
       console.error('Transcoding error:', ffmpegError);
       console.log('Falling back to original video file...');
       
       // Fallback: serve the original video without transcoding
       try {
-        // Copy original video to public directory
-        const publicDir = path.join(process.cwd(), 'public', 'streams', videoId);
-        await fs.mkdir(publicDir, { recursive: true });
-        
-        const videoFileName = path.basename(inputPath);
-        const publicVideoPath = path.join(publicDir, videoFileName);
-        await fs.copyFile(inputPath, publicVideoPath);
-        
-        const videoUrl = `/streams/${videoId}/${videoFileName}`;
-        
-        // Store video metadata in Redis
-        await kv.set(`video:${videoId}`, {
-          id: videoId,
-          url: videoUrl,
-          isOriginal: true,
-          processedAt: new Date().toISOString(),
-          error: 'Transcoding failed, serving original video',
-        });
-        
-        // Clean up local files
-        if (shouldCleanupInput) {
-          await fs.unlink(inputPath);
+        // In production, we can't serve from public directory, so upload to storage
+        if (process.env.VERCEL && isGoogleCloudStorageConfigured()) {
+          // Upload the original video directly to GCS
+          const uploadResult = await uploadFile({
+            localPath: inputPath,
+            remotePath: `${videoId}/${path.basename(inputPath)}`,
+            contentType: 'video/mp4',
+          });
+          
+          // Store video metadata in Redis
+          await kv.set(`video:${videoId}`, {
+            id: videoId,
+            url: uploadResult.url,
+            isOriginal: true,
+            processedAt: new Date().toISOString(),
+            error: 'Transcoding failed, serving original video from storage',
+          });
+          
+          // Clean up local files
+          if (shouldCleanupInput) {
+            await fs.unlink(inputPath);
+          }
+          
+          return NextResponse.json({
+            success: true,
+            url: uploadResult.url,
+            isOriginal: true,
+            message: 'Serving original video from storage (transcoding unavailable)',
+          });
+        } else {
+          // Local development fallback
+          const { publicBaseDir } = getDirectoryPaths();
+          const publicDir = path.join(publicBaseDir, videoId);
+          await fs.mkdir(publicDir, { recursive: true });
+          
+          const videoFileName = path.basename(inputPath);
+          const publicVideoPath = path.join(publicDir, videoFileName);
+          await fs.copyFile(inputPath, publicVideoPath);
+          
+          const videoUrl = `/streams/${videoId}/${videoFileName}`;
+          
+          // Store video metadata in Redis
+          await kv.set(`video:${videoId}`, {
+            id: videoId,
+            url: videoUrl,
+            isOriginal: true,
+            processedAt: new Date().toISOString(),
+            error: 'Transcoding failed, serving original video',
+          });
+          
+          // Clean up local files
+          if (shouldCleanupInput) {
+            await fs.unlink(inputPath);
+          }
+          
+          return NextResponse.json({
+            success: true,
+            url: videoUrl,
+            isOriginal: true,
+            message: 'Serving original video (transcoding unavailable)',
+          });
         }
-        
-        return NextResponse.json({
-          success: true,
-          url: videoUrl,
-          isOriginal: true,
-          message: 'Serving original video (transcoding unavailable)',
-        });
       } catch (fallbackError) {
         console.error('Fallback error:', fallbackError);
         throw fallbackError;

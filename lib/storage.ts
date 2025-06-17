@@ -163,6 +163,13 @@ export function isGoogleCloudStorageConfigured(): boolean {
   return !!storage && !!process.env.GCS_BUCKET_NAME;
 }
 
+// Helper function to get writable temp directory
+export function getTempDir(): string {
+  // In production (Vercel), use /tmp which is the only writable directory
+  // In development, use local temp directory
+  return process.env.VERCEL ? '/tmp' : path.join(process.cwd(), 'temp');
+}
+
 // Download file from GCS to local temp directory
 export async function downloadFromGCS(gcsPath: string): Promise<string> {
   if (!isGoogleCloudStorageConfigured()) {
@@ -171,8 +178,8 @@ export async function downloadFromGCS(gcsPath: string): Promise<string> {
 
   const bucket = storage!.bucket(bucketName);
   
-  // Create local temp path
-  const tempDir = path.join(process.cwd(), 'temp');
+  // Use appropriate temp directory based on environment
+  const tempDir = getTempDir();
   await fs.mkdir(tempDir, { recursive: true });
   
   const filename = path.basename(gcsPath);

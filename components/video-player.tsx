@@ -40,7 +40,7 @@ export function VideoPlayer({
     if (!videoRef.current || !src) return;
 
     const video = videoRef.current;
-    
+
     // Check if this is an HLS stream
     const isHLS = src.endsWith('.m3u8');
     

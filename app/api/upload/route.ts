@@ -7,6 +7,12 @@ import { v4 as uuidv4 } from 'uuid';
 export const runtime = 'nodejs';
 export const maxDuration = 300; // 5 minutes max
 
+// Get appropriate uploads directory based on environment
+function getUploadsDir() {
+  const isProduction = process.env.VERCEL === '1' || process.env.NODE_ENV === 'production';
+  return isProduction ? '/tmp/uploads' : path.join(process.cwd(), 'uploads');
+}
+
 export async function POST(request: NextRequest) {
   try {
     const formData = await request.formData();
@@ -29,7 +35,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Create uploads directory
-    const uploadsDir = path.join(process.cwd(), 'uploads');
+    const uploadsDir = getUploadsDir();
     await mkdir(uploadsDir, { recursive: true });
 
     // Save file

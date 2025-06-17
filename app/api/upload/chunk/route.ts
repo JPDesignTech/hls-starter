@@ -1,10 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { writeFile, mkdir, appendFile, unlink } from 'fs/promises';
+import { writeFile, mkdir, appendFile, unlink, readFile } from 'fs/promises';
 import path from 'path';
 import { v4 as uuidv4 } from 'uuid';
 
 export const runtime = 'nodejs';
 export const maxDuration = 60;
+
+// Get appropriate uploads directory based on environment
+function getUploadsDir() {
+  const isProduction = process.env.VERCEL === '1' || process.env.NODE_ENV === 'production';
+  return isProduction ? '/tmp/uploads' : path.join(process.cwd(), 'uploads');
+}
 
 // Store upload sessions in memory (use Redis in production)
 const uploadSessions = new Map<string, {
@@ -37,7 +43,8 @@ export async function POST(request: NextRequest) {
     if (!sessionId || !uploadSessions.has(sessionId)) {
       sessionId = uuidv4();
       const videoId = uuidv4();
-      const tempPath = path.join(process.cwd(), 'uploads', 'temp', `${videoId}_${filename}`);
+      const uploadsDir = getUploadsDir();
+      const tempPath = path.join(uploadsDir, 'temp', `${videoId}_${filename}`);
       
       // Create temp directory
       await mkdir(path.dirname(tempPath), { recursive: true });
@@ -63,7 +70,11 @@ export async function POST(request: NextRequest) {
     // Check if all chunks are uploaded
     if (session.uploadedChunks.size === session.totalChunks) {
       // Combine all chunks
-      const finalPath = path.join(process.cwd(), 'uploads', `${session.videoId}_${session.filename}`);
+      const uploadsDir = getUploadsDir();
+      const finalPath = path.join(uploadsDir, `${session.videoId}_${session.filename}`);
+      
+      // Ensure uploads directory exists
+      await mkdir(uploadsDir, { recursive: true });
       
       // Create final file by combining chunks in order
       for (let i = 0; i < session.totalChunks; i++) {
@@ -104,6 +115,3 @@ export async function POST(request: NextRequest) {
     );
   }
 }
-
-// Add missing import
-import { readFile } from 'fs/promises'; 

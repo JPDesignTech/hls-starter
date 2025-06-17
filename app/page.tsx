@@ -72,7 +72,7 @@ export default function HomePage() {
     console.log('Updating video:', videoId, updates);
     setVideos(prev => {
       const newVideos = prev.map(v => 
-        v.id === videoId ? { ...v, ...updates } : v
+      v.id === videoId ? { ...v, ...updates } : v
       );
       console.log('Videos after update:', newVideos);
       return newVideos;
@@ -261,14 +261,14 @@ export default function HomePage() {
                   console.log('Direct upload complete:', { videoId, filename });
                   
                   try {
-                    // Trigger processing after direct upload
+                  // Trigger processing after direct upload
                     const response = await fetch('/api/process', {
-                      method: 'POST',
-                      headers: { 'Content-Type': 'application/json' },
-                      body: JSON.stringify({ 
-                        videoId, 
-                        gcsPath: filename 
-                      }),
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ 
+                      videoId, 
+                      gcsPath: filename 
+                    }),
                     });
                     
                     if (!response.ok) {
@@ -290,7 +290,7 @@ export default function HomePage() {
                       // Navigate to analyzer if auto-analyze is enabled
                       if (autoAnalyze) {
                         router.push(`/video/${videoId}/analyze`);
-                      }
+                    }
                     } else {
                       throw new Error('No URL returned from processing');
                     }
@@ -313,11 +313,11 @@ export default function HomePage() {
                   console.log('Chunked upload complete:', { videoId, filename });
                   
                   try {
-                    // Trigger processing after chunked upload
+                  // Trigger processing after chunked upload
                     const response = await fetch('/api/process', {
-                      method: 'POST',
-                      headers: { 'Content-Type': 'application/json' },
-                      body: JSON.stringify({ videoId }),
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ videoId }),
                     });
                     
                     if (!response.ok) {
@@ -339,7 +339,7 @@ export default function HomePage() {
                       // Navigate to analyzer if auto-analyze is enabled
                       if (autoAnalyze) {
                         router.push(`/video/${videoId}/analyze`);
-                      }
+                    }
                     } else {
                       throw new Error('No URL returned from processing');
                     }
@@ -458,13 +458,13 @@ export default function HomePage() {
 
                 {video.status === 'ready' && video.url && (
                   <>
-                    <VideoPlayer
-                      src={video.url}
-                      className="w-full aspect-video"
-                      onQualityChange={(quality) => {
-                        console.log(`Video ${video.id} quality changed to:`, quality);
-                      }}
-                    />
+                  <VideoPlayer
+                    src={video.url}
+                    className="w-full aspect-video"
+                    onQualityChange={(quality) => {
+                      console.log(`Video ${video.id} quality changed to:`, quality);
+                    }}
+                  />
                     <div className="mt-4 flex gap-3">
                       <Link href={`/video/${video.id}/analyze`} className="flex-1">
                         <Button className="w-full bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700">
