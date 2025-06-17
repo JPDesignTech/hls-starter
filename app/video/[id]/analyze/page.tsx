@@ -31,6 +31,10 @@ interface Segment {
   duration: number;
   uri: string;
   index: number;
+  byteRange?: {
+    length: number;
+    offset: number;
+  };
 }
 
 interface ParsedManifest {
@@ -54,6 +58,7 @@ export default function VideoAnalyzePage() {
   const [parsedManifest, setParsedManifest] = useState<ParsedManifest | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [selectedSegment, setSelectedSegment] = useState<Segment | null>(null);
 
   // Fetch video metadata
   useEffect(() => {
@@ -69,7 +74,7 @@ export default function VideoAnalyzePage() {
           console.log('Creating synthetic files array from master URL');
           const baseUrl = data.url.substring(0, data.url.lastIndexOf('/'));
           
-          // Create synthetic file entries
+          // Create synthetic file entries for Google Transcoder output
           data.files = [
             {
               name: `${videoId}/master.m3u8`,
@@ -78,16 +83,15 @@ export default function VideoAnalyzePage() {
             }
           ];
           
-          // Add quality-specific playlists if we have quality information
-          if (data.qualities && data.qualities.length > 0) {
-            data.qualities.forEach((quality: any) => {
-              data.files.push({
-                name: `${videoId}/${quality.name}/playlist.m3u8`,
-                url: `${baseUrl}/${quality.name}/playlist.m3u8`,
-                size: 1024 // Unknown size
-              });
+          // Add quality-specific playlists based on Google Transcoder naming
+          const qualities = ['1080p', '720p', '480p', '360p'];
+          qualities.forEach((quality) => {
+            data.files.push({
+              name: `${videoId}/hls-${quality}.m3u8`,
+              url: `${baseUrl}/hls-${quality}.m3u8`,
+              size: 1024 // Unknown size
             });
-          }
+          });
         }
         
         setVideoData(data);
@@ -125,6 +129,9 @@ export default function VideoAnalyzePage() {
         
         // Parse the manifest
         const parsed = parseManifest(content, selectedManifest);
+        console.log('Parsed manifest:', parsed);
+        console.log('Number of segments:', parsed.segments.length);
+        console.log('Total duration:', parsed.totalDuration);
         setParsedManifest(parsed);
       } catch (err) {
         console.error('Error fetching manifest:', err);
@@ -149,13 +156,35 @@ export default function VideoAnalyzePage() {
       parsed.qualityLevels = [];
       for (let i = 0; i < lines.length; i++) {
         if (lines[i].startsWith('#EXT-X-STREAM-INF')) {
-          const bandwidth = lines[i].match(/BANDWIDTH=(\d+)/)?.[1];
-          const resolution = lines[i].match(/RESOLUTION=([^,\s]+)/)?.[1];
-          if (i + 1 < lines.length) {
+          const bandwidthMatch = lines[i].match(/BANDWIDTH=(\d+)/);
+          const resolutionMatch = lines[i].match(/RESOLUTION=([^,\s]+)/);
+          
+          // For Google Transcoder output, extract quality from the URI
+          if (i + 1 < lines.length && !lines[i + 1].startsWith('#')) {
+            const uri = lines[i + 1];
+            let resolution = resolutionMatch?.[1] || 'Unknown';
+            let qualityName = 'Unknown';
+            
+            // Extract quality from Google Transcoder naming (hls-1080p.m3u8, etc.)
+            const qualityMatch = uri.match(/hls-(\d+p)\.m3u8/);
+            if (qualityMatch) {
+              qualityName = qualityMatch[1];
+              // Map quality to resolution if not provided
+              const resolutionMap: Record<string, string> = {
+                '1080p': '1920x1080',
+                '720p': '1280x720',
+                '480p': '854x480',
+                '360p': '640x360',
+              };
+              if (!resolutionMatch && resolutionMap[qualityName]) {
+                resolution = resolutionMap[qualityName];
+              }
+            }
+            
             parsed.qualityLevels.push({
-              bandwidth: parseInt(bandwidth || '0'),
-              resolution: resolution || 'Unknown',
-              uri: lines[i + 1],
+              bandwidth: parseInt(bandwidthMatch?.[1] || '0'),
+              resolution: resolution,
+              uri: uri,
             });
           }
         }
@@ -163,6 +192,8 @@ export default function VideoAnalyzePage() {
     } else {
       // Parse media playlist
       let segmentIndex = 0;
+      let byteRangeStart = 0;
+      
       for (let i = 0; i < lines.length; i++) {
         if (lines[i].startsWith('#EXT-X-VERSION')) {
           parsed.version = parseInt(lines[i].split(':')[1]);
@@ -170,12 +201,32 @@ export default function VideoAnalyzePage() {
           parsed.targetDuration = parseInt(lines[i].split(':')[1]);
         } else if (lines[i].startsWith('#EXTINF')) {
           const duration = parseFloat(lines[i].split(':')[1].split(',')[0]);
-          if (i + 1 < lines.length && !lines[i + 1].startsWith('#')) {
-            parsed.segments.push({
+          
+          // Check if next line is BYTERANGE (Google Transcoder format)
+          let byteRange = null;
+          let uriLineOffset = 1;
+          
+          if (i + 1 < lines.length && lines[i + 1].startsWith('#EXT-X-BYTERANGE')) {
+            const rangeMatch = lines[i + 1].match(/#EXT-X-BYTERANGE:(\d+)(@(\d+))?/);
+            if (rangeMatch) {
+              const length = parseInt(rangeMatch[1]);
+              const offset = rangeMatch[3] ? parseInt(rangeMatch[3]) : byteRangeStart;
+              byteRange = { length, offset };
+              byteRangeStart = offset + length;
+              uriLineOffset = 2; // URI is 2 lines after EXTINF
+            }
+          }
+          
+          // Get the URI (either 1 or 2 lines after EXTINF)
+          if (i + uriLineOffset < lines.length && !lines[i + uriLineOffset].startsWith('#')) {
+            const segment: Segment = {
               duration,
-              uri: lines[i + 1],
+              uri: lines[i + uriLineOffset],
               index: segmentIndex++,
-            });
+              ...(byteRange && { byteRange })
+            };
+            
+            parsed.segments.push(segment);
             parsed.totalDuration += duration;
           }
         }
@@ -488,26 +539,35 @@ export default function VideoAnalyzePage() {
                           
                           {/* Visual Timeline */}
                           <div className="bg-black/30 rounded-lg p-4 mb-4">
-                            <div className="relative h-12 bg-white/5 rounded-full overflow-hidden">
+                            <div className="relative h-16 bg-white/5 rounded overflow-hidden">
                               {parsedManifest.segments.map((segment, idx) => {
                                 const startPercent = (parsedManifest.segments
                                   .slice(0, idx)
                                   .reduce((acc, s) => acc + s.duration, 0) / parsedManifest.totalDuration) * 100;
                                 const widthPercent = (segment.duration / parsedManifest.totalDuration) * 100;
                                 
+                                // Create color based on segment index for variety
+                                const hue = (idx * 137.5) % 360; // Golden angle for good color distribution
+                                const color = `hsl(${hue}, 70%, 50%)`;
+                                
                                 return (
                                   <div
                                     key={segment.index}
-                                    className="absolute h-full bg-gradient-to-r from-purple-500 to-purple-600 hover:from-purple-400 hover:to-purple-500 transition-colors cursor-pointer group"
+                                    className="absolute h-full transition-all cursor-pointer group hover:z-10"
                                     style={{
                                       left: `${startPercent}%`,
                                       width: `${widthPercent}%`,
+                                      backgroundColor: color,
                                       borderRight: '1px solid rgba(0,0,0,0.3)',
+                                      opacity: 0.8,
                                     }}
+                                    onMouseEnter={(e) => e.currentTarget.style.opacity = '1'}
+                                    onMouseLeave={(e) => e.currentTarget.style.opacity = '0.8'}
+                                    onClick={() => setSelectedSegment(segment)}
                                     title={`Segment #${segment.index}: ${segment.duration.toFixed(3)}s`}
                                   >
                                     <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-                                      <span className="text-xs text-white font-bold">
+                                      <span className="text-xs text-white font-bold drop-shadow-lg">
                                         #{segment.index}
                                       </span>
                                     </div>
@@ -520,6 +580,57 @@ export default function VideoAnalyzePage() {
                               <span>{formatDuration(parsedManifest.totalDuration)}</span>
                             </div>
                           </div>
+                          
+                          {/* Selected Segment Details */}
+                          {selectedSegment && (
+                            <div className="bg-white/5 rounded-lg p-4 mb-4 border border-purple-500/30">
+                              <div className="flex justify-between items-start mb-2">
+                                <h4 className="text-white font-semibold">Segment Details</h4>
+                                <button
+                                  onClick={() => setSelectedSegment(null)}
+                                  className="text-gray-400 hover:text-white"
+                                >
+                                  <span className="text-sm">✕</span>
+                                </button>
+                              </div>
+                              <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
+                                <div>
+                                  <p className="text-gray-400">Index</p>
+                                  <p className="text-white font-mono">#{selectedSegment.index}</p>
+                                </div>
+                                <div>
+                                  <p className="text-gray-400">Duration</p>
+                                  <p className="text-white font-mono">{selectedSegment.duration.toFixed(3)}s</p>
+                                </div>
+                                <div>
+                                  <p className="text-gray-400">Start Time</p>
+                                  <p className="text-white font-mono">
+                                    {formatDuration(
+                                      parsedManifest.segments
+                                        .slice(0, selectedSegment.index)
+                                        .reduce((acc, s) => acc + s.duration, 0)
+                                    )}
+                                  </p>
+                                </div>
+                                <div>
+                                  <p className="text-gray-400">End Time</p>
+                                  <p className="text-white font-mono">
+                                    {formatDuration(
+                                      parsedManifest.segments
+                                        .slice(0, selectedSegment.index + 1)
+                                        .reduce((acc, s) => acc + s.duration, 0)
+                                    )}
+                                  </p>
+                                </div>
+                              </div>
+                              <div className="mt-3">
+                                <p className="text-gray-400 text-sm mb-1">Filename</p>
+                                <p className="text-white font-mono text-xs break-all bg-black/30 p-2 rounded">
+                                  {selectedSegment.uri}
+                                </p>
+                              </div>
+                            </div>
+                          )}
                           
                           {/* Segment List */}
                           <div className="bg-black/30 rounded-lg p-4 max-h-64 overflow-y-auto">

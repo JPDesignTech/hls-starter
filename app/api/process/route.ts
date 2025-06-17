@@ -1,188 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
-import path from 'path';
-import { promises as fs } from 'fs';
-import { v4 as uuidv4 } from 'uuid';
-import { uploadDirectory, downloadFromGCS, isGoogleCloudStorageConfigured, getTempDir, uploadFile } from '@/lib/storage';
 import { kv } from '@/lib/redis';
+import { isGoogleCloudStorageConfigured } from '@/lib/storage';
+import { createTranscodeJob, waitForTranscodeJob } from '@/lib/transcoder';
 
 // Ensure this route only runs on Node.js runtime
 export const runtime = 'nodejs';
 export const maxDuration = 300; // 5 minutes for video processing
-
-// Quality presets for adaptive bitrate streaming
-const QUALITY_PRESETS = [
-  {
-    name: '1080p',
-    width: 1920,
-    height: 1080,
-    videoBitrate: '5000k',
-    audioBitrate: '192k',
-    maxrate: '5350k',
-    bufsize: '7500k',
-  },
-  {
-    name: '720p',
-    width: 1280,
-    height: 720,
-    videoBitrate: '2800k',
-    audioBitrate: '128k',
-    maxrate: '3000k',
-    bufsize: '4200k',
-  },
-  {
-    name: '480p',
-    width: 854,
-    height: 480,
-    videoBitrate: '1400k',
-    audioBitrate: '128k',
-    maxrate: '1498k',
-    bufsize: '2100k',
-  },
-  {
-    name: '360p',
-    width: 640,
-    height: 360,
-    videoBitrate: '800k',
-    audioBitrate: '96k',
-    maxrate: '856k',
-    bufsize: '1200k',
-  },
-];
-
-// Helper function to get appropriate directory paths for the environment
-function getDirectoryPaths() {
-  const isProduction = process.env.VERCEL === '1' || process.env.NODE_ENV === 'production';
-  
-  if (isProduction) {
-    // In production (Vercel), use /tmp which is the only writable directory
-    return {
-      uploadsDir: '/tmp/uploads',
-      outputBaseDir: '/tmp/output',
-      publicBaseDir: '/tmp/public/streams',
-    };
-  } else {
-    // In development, use local directories
-    return {
-      uploadsDir: path.join(process.cwd(), 'uploads'),
-      outputBaseDir: path.join(process.cwd(), 'output'),
-      publicBaseDir: path.join(process.cwd(), 'public', 'streams'),
-    };
-  }
-}
-
-// Get video metadata
-async function getVideoMetadata(inputPath: string): Promise<any> {
-  const ffmpeg = (await import('fluent-ffmpeg')).default;
-  return new Promise((resolve, reject) => {
-    ffmpeg.ffprobe(inputPath, (err: any, metadata: any) => {
-      if (err) reject(err);
-      else resolve(metadata);
-    });
-  });
-}
-
-// Create master playlist for adaptive bitrate streaming
-async function createMasterPlaylist(
-  outputPath: string,
-  qualities: Array<{
-    name: string;
-    playlistPath: string;
-    bandwidth: number;
-    resolution: string;
-  }>
-): Promise<void> {
-  let content = '#EXTM3U\n#EXT-X-VERSION:3\n\n';
-  
-  for (const quality of qualities) {
-    content += `#EXT-X-STREAM-INF:BANDWIDTH=${quality.bandwidth},RESOLUTION=${quality.resolution}\n`;
-    content += `${quality.name}/playlist.m3u8\n\n`;
-  }
-  
-  await fs.writeFile(outputPath, content, 'utf-8');
-}
-
-// Transcode video to multiple qualities
-async function transcodeVideo(options: {
-  inputPath: string;
-  outputDir: string;
-  videoId: string;
-}) {
-  const ffmpeg = (await import('fluent-ffmpeg')).default;
-  const { inputPath, outputDir, videoId } = options;
-  
-  // Create output directory
-  await fs.mkdir(outputDir, { recursive: true });
-  
-  // Get video metadata
-  const metadata = await getVideoMetadata(inputPath);
-  const videoStream = metadata.streams.find((s: any) => s.codec_type === 'video');
-  
-  if (!videoStream) {
-    throw new Error('No video stream found in input file');
-  }
-  
-  const sourceHeight = videoStream.height || 1080;
-  const qualities: Array<{
-    name: string;
-    playlistPath: string;
-    bandwidth: number;
-    resolution: string;
-  }> = [];
-  
-  // Filter qualities based on source video resolution
-  const applicableQualities = QUALITY_PRESETS.filter(preset => preset.height <= sourceHeight);
-  
-  // Transcode to each quality
-  for (const preset of applicableQualities) {
-    const outputPath = path.join(outputDir, preset.name);
-    await fs.mkdir(outputPath, { recursive: true });
-    
-    const playlistPath = path.join(outputPath, 'playlist.m3u8');
-    const segmentPath = path.join(outputPath, 'segment_%03d.ts');
-    
-    await new Promise<void>((resolve, reject) => {
-      ffmpeg(inputPath)
-        .outputOptions([
-          '-c:v libx264',
-          '-c:a aac',
-          `-b:v ${preset.videoBitrate}`,
-          `-b:a ${preset.audioBitrate}`,
-          `-vf scale=${preset.width}:${preset.height}`,
-          `-maxrate ${preset.maxrate}`,
-          `-bufsize ${preset.bufsize}`,
-          '-preset fast',
-          '-profile:v main',
-          '-level 4.0',
-          '-hls_time 6',
-          '-hls_list_size 0',
-          '-hls_segment_filename', segmentPath,
-          '-f hls',
-        ])
-        .output(playlistPath)
-        .on('end', () => {
-          qualities.push({
-            name: preset.name,
-            playlistPath: path.relative(outputDir, playlistPath),
-            bandwidth: parseInt(preset.videoBitrate) * 1000 + parseInt(preset.audioBitrate) * 1000,
-            resolution: `${preset.width}x${preset.height}`,
-          });
-          resolve();
-        })
-        .on('error', reject)
-        .run();
-    });
-  }
-  
-  // Create master playlist
-  const masterPlaylistPath = path.join(outputDir, 'master.m3u8');
-  await createMasterPlaylist(masterPlaylistPath, qualities);
-  
-  return {
-    videoId,
-    qualities,
-    masterPlaylistPath: path.relative(outputDir, masterPlaylistPath),
-  };
-}
 
 export async function POST(request: NextRequest) {
   try {
@@ -196,176 +19,122 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    let inputPath: string;
-    let shouldCleanupInput = false;
-
-    // Check if video is in GCS or local storage
-    if (gcsPath && isGoogleCloudStorageConfigured()) {
-      // Download from GCS to local temp directory
-      inputPath = await downloadFromGCS(gcsPath);
-      shouldCleanupInput = true;
-    } else {
-      // Get video from local uploads directory
-      const { uploadsDir } = getDirectoryPaths();
-      
-      try {
-        await fs.mkdir(uploadsDir, { recursive: true });
-      const files = await fs.readdir(uploadsDir);
-      const videoFile = files.find((f: string) => f.startsWith(videoId));
-
-      if (!videoFile) {
-        return NextResponse.json(
-          { error: 'Video not found' },
-          { status: 404 }
-        );
-      }
-
-      inputPath = path.join(uploadsDir, videoFile);
-      } catch (err) {
-        console.error('Error reading uploads directory:', err);
-        return NextResponse.json(
-          { error: 'Video not found in uploads' },
-          { status: 404 }
-        );
-      }
+    // Check if we're using Google Cloud Storage and Transcoder API
+    if (!isGoogleCloudStorageConfigured()) {
+      return NextResponse.json(
+        { error: 'Google Cloud Storage is required for video transcoding' },
+        { status: 500 }
+      );
     }
+
+    if (!gcsPath) {
+      return NextResponse.json(
+        { error: 'No GCS path provided' },
+        { status: 400 }
+      );
+    }
+
+    // Check for required environment variables
+    const projectId = process.env.GCP_PROJECT_ID;
+    const bucketName = process.env.GCS_BUCKET_NAME;
+    
+    if (!projectId) {
+      console.error('[Process] Missing GCP_PROJECT_ID environment variable');
+      return NextResponse.json(
+        { error: 'Google Cloud Project ID not configured. Please set GCP_PROJECT_ID environment variable.' },
+        { status: 500 }
+      );
+    }
+    
+    if (!bucketName) {
+      console.error('[Process] Missing GCS_BUCKET_NAME environment variable');
+      return NextResponse.json(
+        { error: 'Google Cloud Storage bucket not configured. Please set GCS_BUCKET_NAME environment variable.' },
+        { status: 500 }
+      );
+    }
+    
+    // Prepare input and output URIs for Transcoder API
+    const inputUri = `gs://${bucketName}/${gcsPath}`;
+    const outputUri = `gs://${bucketName}/${videoId}/`;
+
+    console.log('[Process] Starting transcoding job:', {
+      videoId,
+      inputUri,
+      outputUri,
+    });
 
     try {
-      // Check if ffmpeg is available
-      const ffmpeg = (await import('fluent-ffmpeg')).default;
-      
-      // Try to get video metadata as a test
-      await getVideoMetadata(inputPath);
-      
-      const { outputBaseDir } = getDirectoryPaths();
-      const outputDir = path.join(outputBaseDir, videoId);
+      // Create a transcoding job using Google Cloud Transcoder API
+      const jobName = await createTranscodeJob({
+        inputUri,
+        outputUri,
+        projectId,
+        location: 'us-central1',
+      });
 
-    // Transcode video to multiple qualities
-    const transcodeResult = await transcodeVideo({
-      inputPath,
-      outputDir,
-      videoId,
-    });
+      console.log('[Process] Created transcoding job:', jobName);
 
-    // Upload to storage (Google Cloud Storage or local)
-    console.log('[Process] Uploading files from:', outputDir, 'to GCS path:', videoId);
-    const uploadedFiles = await uploadDirectory(outputDir, videoId);
-    console.log('[Process] Uploaded files count:', uploadedFiles.length);
-    console.log('[Process] Uploaded files:', uploadedFiles.map(f => ({ name: f.name, url: f.url })));
+      // Wait for the job to complete
+      const success = await waitForTranscodeJob(jobName);
 
-    // Get the master playlist URL
-    const masterPlaylistFile = uploadedFiles.find(f => f.name.includes('master.m3u8'));
-    
-    if (!masterPlaylistFile) {
-      throw new Error('Master playlist not found');
-    }
-
-    // Store video metadata in Redis
-    const videoData = {
-      id: videoId,
-      url: masterPlaylistFile.url,
-      qualities: transcodeResult.qualities,
-      processedAt: new Date().toISOString(),
-      files: uploadedFiles.map(f => ({
-        name: f.name,
-        url: f.url,
-        size: f.size,
-      })),
-    };
-    console.log('[Process] Storing video data in Redis:', JSON.stringify(videoData, null, 2));
-    await kv.set(`video:${videoId}`, videoData);
-
-    // Clean up local files
-    if (shouldCleanupInput) {
-      await fs.unlink(inputPath);
-    }
-      
-      // Clean up output directory after upload in production
-      if (process.env.VERCEL) {
-        try {
-          await fs.rm(outputDir, { recursive: true, force: true });
-        } catch (err) {
-          console.error('Error cleaning up output directory:', err);
-        }
+      if (!success) {
+        throw new Error('Transcoding job failed');
       }
 
-    return NextResponse.json({
-      success: true,
-      url: masterPlaylistFile.url,
-      qualities: transcodeResult.qualities,
-    });
-    } catch (ffmpegError) {
-      console.error('Transcoding error:', ffmpegError);
-      console.log('Falling back to original video file...');
+      console.log('[Process] Transcoding job completed successfully');
+
+      // Get the master playlist URL
+      const masterPlaylistUrl = `https://storage.googleapis.com/${bucketName}/${videoId}/master.m3u8`;
       
-      // Fallback: serve the original video without transcoding
-      try {
-        // In production, we can't serve from public directory, so upload to storage
-        if (process.env.VERCEL && isGoogleCloudStorageConfigured()) {
-          // Upload the original video directly to GCS
-          const uploadResult = await uploadFile({
-            localPath: inputPath,
-            remotePath: `${videoId}/${path.basename(inputPath)}`,
-            contentType: 'video/mp4',
-          });
-          
-          // Store video metadata in Redis
-          await kv.set(`video:${videoId}`, {
-            id: videoId,
-            url: uploadResult.url,
-            isOriginal: true,
-            processedAt: new Date().toISOString(),
-            error: 'Transcoding failed, serving original video from storage',
-          });
-          
-          // Clean up local files
-          if (shouldCleanupInput) {
-            await fs.unlink(inputPath);
-          }
-          
-          return NextResponse.json({
-            success: true,
-            url: uploadResult.url,
-            isOriginal: true,
-            message: 'Serving original video from storage (transcoding unavailable)',
-          });
-        } else {
-          // Local development fallback
-          const { publicBaseDir } = getDirectoryPaths();
-          const publicDir = path.join(publicBaseDir, videoId);
-          await fs.mkdir(publicDir, { recursive: true });
-          
-          const videoFileName = path.basename(inputPath);
-          const publicVideoPath = path.join(publicDir, videoFileName);
-          await fs.copyFile(inputPath, publicVideoPath);
-          
-          const videoUrl = `/streams/${videoId}/${videoFileName}`;
-          
-          // Store video metadata in Redis
-          await kv.set(`video:${videoId}`, {
-            id: videoId,
-            url: videoUrl,
-            isOriginal: true,
-            processedAt: new Date().toISOString(),
-            error: 'Transcoding failed, serving original video',
-          });
-          
-          // Clean up local files
-          if (shouldCleanupInput) {
-            await fs.unlink(inputPath);
-          }
-          
-          return NextResponse.json({
-            success: true,
-            url: videoUrl,
-            isOriginal: true,
-            message: 'Serving original video (transcoding unavailable)',
-          });
-        }
-      } catch (fallbackError) {
-        console.error('Fallback error:', fallbackError);
-        throw fallbackError;
-      }
+      // Add a small delay to ensure files are fully written
+      await new Promise(resolve => setTimeout(resolve, 2000));
+
+      // Store video metadata in Redis
+      const videoData = {
+        id: videoId,
+        url: masterPlaylistUrl,
+        processedAt: new Date().toISOString(),
+        transcoderJobName: jobName,
+        qualities: [
+          { name: '1080p', resolution: '1920x1080', bitrate: '5000k' },
+          { name: '720p', resolution: '1280x720', bitrate: '2800k' },
+          { name: '480p', resolution: '854x480', bitrate: '1400k' },
+          { name: '360p', resolution: '640x360', bitrate: '800k' },
+        ],
+      };
+
+      console.log('[Process] Storing video data in Redis:', JSON.stringify(videoData, null, 2));
+      await kv.set(`video:${videoId}`, videoData);
+
+      return NextResponse.json({
+        success: true,
+        url: masterPlaylistUrl,
+        qualities: videoData.qualities,
+        jobName,
+      });
+
+    } catch (transcodeError) {
+      console.error('Transcoding error:', transcodeError);
+      
+      // Fallback: serve the original video
+      const originalVideoUrl = `https://storage.googleapis.com/${bucketName}/${gcsPath}`;
+      
+      // Store video metadata in Redis
+      await kv.set(`video:${videoId}`, {
+        id: videoId,
+        url: originalVideoUrl,
+        isOriginal: true,
+        processedAt: new Date().toISOString(),
+        error: 'Transcoding failed, serving original video from storage',
+      });
+      
+      return NextResponse.json({
+        success: true,
+        url: originalVideoUrl,
+        isOriginal: true,
+        message: 'Serving original video from storage (transcoding failed)',
+      });
     }
   } catch (error) {
     console.error('Processing error:', error);
