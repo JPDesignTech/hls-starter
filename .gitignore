@@ -73,3 +73,8 @@ logs/
 # Temporary files
 tmp/
 temp/
+
+# GCP Service Account Keys
+personalportfolio-4caf3-fb3a4d5f37b7.json
+*-service-account-key.json
+gcp-key.json

@@ -1,13 +1,10 @@
 import { Storage } from '@google-cloud/storage';
 import path from 'path';
 import { promises as fs } from 'fs';
+import { createStorage } from './gcs-config';
 
 // Initialize Google Cloud Storage
-// In production, this will use Application Default Credentials
-// For local development, set GOOGLE_APPLICATION_CREDENTIALS env var
-const storage = process.env.GCS_BUCKET_NAME 
-  ? new Storage() 
-  : null;
+const storage = process.env.GCS_BUCKET_NAME ? createStorage() : null;
 
 const bucketName = process.env.GCS_BUCKET_NAME || 'hls-demo-segments';
 
@@ -157,5 +154,33 @@ export async function getSignedUrl(
     expires: Date.now() + expiresInMinutes * 60 * 1000,
   });
   
-  return url;
+return url;
+}
+
+// Helper function to check if Google Cloud Storage is configured
+export function isGoogleCloudStorageConfigured(): boolean {
+  return !!storage && !!process.env.GCS_BUCKET_NAME;
+}
+
+// Download file from GCS to local temp directory
+export async function downloadFromGCS(gcsPath: string): Promise<string> {
+  if (!isGoogleCloudStorageConfigured()) {
+    throw new Error('Google Cloud Storage is not configured');
+  }
+
+  const bucket = storage!.bucket(bucketName);
+  
+  // Create local temp path
+  const tempDir = path.join(process.cwd(), 'temp');
+  await fs.mkdir(tempDir, { recursive: true });
+  
+  const filename = path.basename(gcsPath);
+  const localPath = path.join(tempDir, filename);
+  
+  // Download file
+  await bucket.file(gcsPath).download({
+    destination: localPath,
+  });
+  
+  return localPath;
 } 

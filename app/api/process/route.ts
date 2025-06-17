@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import path from 'path';
 import { promises as fs } from 'fs';
 import { v4 as uuidv4 } from 'uuid';
-import { uploadDirectory } from '@/lib/storage';
+import { uploadDirectory, downloadFromGCS, isGoogleCloudStorageConfigured } from '@/lib/storage';
 import { kv } from '@/lib/redis';
 
 // Ensure this route only runs on Node.js runtime
@@ -166,7 +166,7 @@ async function transcodeVideo(options: {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { videoId } = body;
+    const { videoId, gcsPath } = body;
 
     if (!videoId) {
       return NextResponse.json(
@@ -175,19 +175,30 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Get video info from uploads directory
-    const uploadsDir = path.join(process.cwd(), 'uploads');
-    const files = await fs.readdir(uploadsDir);
-    const videoFile = files.find((f: string) => f.startsWith(videoId));
+    let inputPath: string;
+    let shouldCleanupInput = false;
 
-    if (!videoFile) {
-      return NextResponse.json(
-        { error: 'Video not found' },
-        { status: 404 }
-      );
+    // Check if video is in GCS or local storage
+    if (gcsPath && isGoogleCloudStorageConfigured()) {
+      // Download from GCS to local temp directory
+      inputPath = await downloadFromGCS(gcsPath);
+      shouldCleanupInput = true;
+    } else {
+      // Get video from local uploads directory
+      const uploadsDir = path.join(process.cwd(), 'uploads');
+      const files = await fs.readdir(uploadsDir);
+      const videoFile = files.find((f: string) => f.startsWith(videoId));
+
+      if (!videoFile) {
+        return NextResponse.json(
+          { error: 'Video not found' },
+          { status: 404 }
+        );
+      }
+
+      inputPath = path.join(uploadsDir, videoFile);
     }
 
-    const inputPath = path.join(uploadsDir, videoFile);
     const outputDir = path.join(process.cwd(), 'output', videoId);
 
     // Transcode video to multiple qualities
@@ -220,9 +231,12 @@ export async function POST(request: NextRequest) {
       })),
     });
 
-    // Clean up local files (optional)
+    // Clean up local files
+    if (shouldCleanupInput) {
+      await fs.unlink(inputPath);
+    }
+    // Optionally clean up output directory after upload
     // await fs.rm(outputDir, { recursive: true, force: true });
-    // await fs.unlink(inputPath);
 
     return NextResponse.json({
       success: true,
