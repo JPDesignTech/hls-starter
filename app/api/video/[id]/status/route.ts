@@ -7,14 +7,23 @@ export async function GET(
 ) {
   try {
     const { id: videoId } = await params;
+    console.log(`[Status API] Fetching video data for: video:${videoId}`);
     const videoData = await kv.get(`video:${videoId}`);
     
     if (!videoData) {
+      console.log(`[Status API] Video not found in Redis for ID: ${videoId}`);
       return NextResponse.json(
         { error: 'Video not found' },
         { status: 404 }
       );
     }
+    
+    console.log(`[Status API] Found video data:`, {
+      id: videoData.id,
+      url: videoData.url,
+      filesCount: videoData.files?.length || 0,
+      isOriginal: videoData.isOriginal
+    });
     
     return NextResponse.json({
       status: 'ready',

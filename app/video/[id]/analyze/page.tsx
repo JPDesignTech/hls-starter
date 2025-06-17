@@ -65,7 +65,7 @@ export default function VideoAnalyzePage() {
         console.log('Video data:', data);
         
         // If we have a master.m3u8 URL but no files array, create a synthetic files array
-        if (!data.files && data.url && data.url.includes('master.m3u8')) {
+        if ((!data.files || data.files.length === 0) && data.url && data.url.includes('master.m3u8')) {
           console.log('Creating synthetic files array from master URL');
           const baseUrl = data.url.substring(0, data.url.lastIndexOf('/'));
           

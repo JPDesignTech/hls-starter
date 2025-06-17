@@ -29,7 +29,9 @@ export async function uploadFile(options: UploadOptions): Promise<StorageFile> {
   
   // For local development without GCS, copy to public directory
   if (!storage) {
-    const publicPath = path.join(process.cwd(), 'public', 'streams', remotePath);
+    // Ensure forward slashes for URL paths
+    const urlPath = remotePath.replace(/\\/g, '/');
+    const publicPath = path.join(process.cwd(), 'public', 'streams', ...urlPath.split('/'));
     const publicDir = path.dirname(publicPath);
     await fs.mkdir(publicDir, { recursive: true });
     await fs.copyFile(localPath, publicPath);
@@ -37,7 +39,7 @@ export async function uploadFile(options: UploadOptions): Promise<StorageFile> {
     const stats = await fs.stat(publicPath);
     return {
       name: remotePath,
-      url: `/streams/${remotePath}`,
+      url: `/streams/${urlPath}`,
       size: stats.size,
       contentType: contentType || 'application/octet-stream',
       created: stats.birthtime,
@@ -46,7 +48,9 @@ export async function uploadFile(options: UploadOptions): Promise<StorageFile> {
   
   // Upload to Google Cloud Storage
   const bucket = storage.bucket(bucketName);
-  const file = bucket.file(remotePath);
+  // Ensure forward slashes for GCS paths
+  const gcsPath = remotePath.replace(/\\/g, '/');
+  const file = bucket.file(gcsPath);
   
   await file.save(await fs.readFile(localPath), {
     metadata: {
@@ -63,7 +67,7 @@ export async function uploadFile(options: UploadOptions): Promise<StorageFile> {
   
   return {
     name: remotePath,
-    url: `https://storage.googleapis.com/${bucketName}/${remotePath}`,
+    url: `https://storage.googleapis.com/${bucketName}/${gcsPath}`,
     size: parseInt(metadata.size as string) || 0,
     contentType: metadata.contentType || 'application/octet-stream',
     created: new Date(metadata.timeCreated || Date.now()),
@@ -81,7 +85,7 @@ export async function uploadDirectory(
   for (const file of files) {
     if (file.isFile()) {
       const localPath = path.join(localDir, file.name);
-      const remotePath = path.join(remotePrefix, file.name);
+      const remotePath = `${remotePrefix}/${file.name}`;
       
       // Determine content type based on extension
       let contentType = 'application/octet-stream';
@@ -105,7 +109,7 @@ export async function uploadDirectory(
       // Recursively upload subdirectories
       const subDirUploads = await uploadDirectory(
         path.join(localDir, file.name),
-        path.join(remotePrefix, file.name)
+        `${remotePrefix}/${file.name}`
       );
       uploads.push(...subDirUploads);
     }

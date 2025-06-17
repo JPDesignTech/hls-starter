@@ -29,7 +29,7 @@ export async function POST(request: NextRequest) {
 
     const videoId = uuidv4();
     const fileExtension = filename.split('.').pop();
-    const gcsFilename = `uploads/${videoId}/original.${fileExtension}`;
+    const gcsFilename = `${videoId}/original.${fileExtension}`;
 
     // Generate a signed URL for uploading
     const [url] = await bucket.file(gcsFilename).getSignedUrl({

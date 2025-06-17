@@ -248,7 +248,10 @@ export async function POST(request: NextRequest) {
     });
 
     // Upload to storage (Google Cloud Storage or local)
+    console.log('[Process] Uploading files from:', outputDir, 'to GCS path:', videoId);
     const uploadedFiles = await uploadDirectory(outputDir, videoId);
+    console.log('[Process] Uploaded files count:', uploadedFiles.length);
+    console.log('[Process] Uploaded files:', uploadedFiles.map(f => ({ name: f.name, url: f.url })));
 
     // Get the master playlist URL
     const masterPlaylistFile = uploadedFiles.find(f => f.name.includes('master.m3u8'));
@@ -258,7 +261,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Store video metadata in Redis
-    await kv.set(`video:${videoId}`, {
+    const videoData = {
       id: videoId,
       url: masterPlaylistFile.url,
       qualities: transcodeResult.qualities,
@@ -268,7 +271,9 @@ export async function POST(request: NextRequest) {
         url: f.url,
         size: f.size,
       })),
-    });
+    };
+    console.log('[Process] Storing video data in Redis:', JSON.stringify(videoData, null, 2));
+    await kv.set(`video:${videoId}`, videoData);
 
     // Clean up local files
     if (shouldCleanupInput) {
