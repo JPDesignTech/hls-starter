@@ -7,6 +7,20 @@ const nextConfig: NextConfig = {
       bodySizeLimit: '2gb',
     },
   },
+  // Add webpack configuration to handle fluent-ffmpeg issues
+  webpack: (config, { isServer }) => {
+    if (isServer) {
+      // Ignore the lib-cov folder that fluent-ffmpeg tries to require
+      config.resolve.alias = {
+        ...config.resolve.alias,
+        './lib-cov/fluent-ffmpeg': false,
+      };
+      
+      // Mark fluent-ffmpeg as external to prevent bundling issues
+      config.externals = [...(config.externals || []), 'fluent-ffmpeg'];
+    }
+    return config;
+  },
   // Configure headers for HLS streaming
   async headers() {
     return [
