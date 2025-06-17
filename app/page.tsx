@@ -9,7 +9,9 @@ import { Progress } from '@/components/ui/progress';
 import { VideoPlayer } from '@/components/video-player';
 import { DirectUpload } from '@/components/direct-upload';
 import { ChunkedUpload } from '@/components/chunked-upload';
-import { Upload, Video, Loader2, CheckCircle2, AlertCircle, Zap, CloudUpload, Package, Server } from 'lucide-react';
+import { Upload, Video, Loader2, CheckCircle2, AlertCircle, Zap, CloudUpload, Package, Server, BarChart3 } from 'lucide-react';
+import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 
 interface VideoInfo {
   id: string;
@@ -23,10 +25,12 @@ interface VideoInfo {
 type UploadMethod = 'direct' | 'chunked' | 'traditional';
 
 export default function HomePage() {
+  const router = useRouter();
   const [videos, setVideos] = React.useState<VideoInfo[]>([]);
   const [selectedFile, setSelectedFile] = React.useState<File | null>(null);
   const [isUploading, setIsUploading] = React.useState(false);
   const [selectedMethod, setSelectedMethod] = React.useState<UploadMethod>('direct');
+  const [autoAnalyze, setAutoAnalyze] = React.useState(false);
   const fileInputRef = React.useRef<HTMLInputElement>(null);
 
   // Poll for video status updates
@@ -137,6 +141,11 @@ export default function HomePage() {
           ? { ...v, status: 'ready', progress: 100, url: result.url } 
           : v
       ));
+      
+      // Navigate to analyzer if auto-analyze is enabled
+      if (autoAnalyze) {
+        router.push(`/video/${videoId}/analyze`);
+      }
     } catch (error) {
       // Update video with error status
       setVideos(prev => prev.map(v => 
@@ -233,6 +242,19 @@ export default function HomePage() {
             </CardDescription>
           </CardHeader>
           <CardContent>
+            <div className="mb-4 flex items-center gap-2">
+              <input
+                type="checkbox"
+                id="auto-analyze"
+                checked={autoAnalyze}
+                onChange={(e) => setAutoAnalyze(e.target.checked)}
+                className="rounded border-gray-300"
+              />
+              <Label htmlFor="auto-analyze" className="text-white cursor-pointer">
+                Automatically open HLS analyzer after upload
+              </Label>
+            </div>
+            
             {selectedMethod === 'direct' && (
               <DirectUpload 
                 onUploadComplete={async (videoId, filename) => {
@@ -264,6 +286,11 @@ export default function HomePage() {
                         url: result.url,
                         progress: 100,
                       });
+                      
+                      // Navigate to analyzer if auto-analyze is enabled
+                      if (autoAnalyze) {
+                        router.push(`/video/${videoId}/analyze`);
+                      }
                     } else {
                       throw new Error('No URL returned from processing');
                     }
@@ -308,6 +335,11 @@ export default function HomePage() {
                         url: result.url,
                         progress: 100,
                       });
+                      
+                      // Navigate to analyzer if auto-analyze is enabled
+                      if (autoAnalyze) {
+                        router.push(`/video/${videoId}/analyze`);
+                      }
                     } else {
                       throw new Error('No URL returned from processing');
                     }
@@ -425,13 +457,23 @@ export default function HomePage() {
                 )}
 
                 {video.status === 'ready' && video.url && (
-                  <VideoPlayer
-                    src={video.url}
-                    className="w-full aspect-video"
-                    onQualityChange={(quality) => {
-                      console.log(`Video ${video.id} quality changed to:`, quality);
-                    }}
-                  />
+                  <>
+                    <VideoPlayer
+                      src={video.url}
+                      className="w-full aspect-video"
+                      onQualityChange={(quality) => {
+                        console.log(`Video ${video.id} quality changed to:`, quality);
+                      }}
+                    />
+                    <div className="mt-4 flex gap-3">
+                      <Link href={`/video/${video.id}/analyze`} className="flex-1">
+                        <Button className="w-full bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700">
+                          <BarChart3 className="mr-2 h-4 w-4" />
+                          Analyze HLS Stream
+                        </Button>
+                      </Link>
+                    </div>
+                  </>
                 )}
               </CardContent>
             </Card>
