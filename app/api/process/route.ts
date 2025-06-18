@@ -75,6 +75,15 @@ export async function POST(request: NextRequest) {
 
       console.log('[Process] Created transcoding job:', jobName);
 
+      // Store initial processing state with job name
+      await kv.set(`video:${videoId}`, {
+        id: videoId,
+        transcoderJobName: jobName,
+        processingStartTime: Date.now(),
+        status: 'processing',
+        progress: 50
+      });
+
       // Wait for the job to complete
       const success = await waitForTranscodeJob(jobName);
 

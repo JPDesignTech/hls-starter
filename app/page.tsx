@@ -9,7 +9,7 @@ import { Progress } from '@/components/ui/progress';
 import { VideoPlayer } from '@/components/video-player';
 import { DirectUpload } from '@/components/direct-upload';
 import { ChunkedUpload } from '@/components/chunked-upload';
-import { Upload, Video, Loader2, CheckCircle2, AlertCircle, Zap, CloudUpload, Package, Server, BarChart3, Link as LinkIcon } from 'lucide-react';
+import { Upload, Video, Loader2, CheckCircle2, AlertCircle, Zap, CloudUpload, Package, Server, BarChart3, Link as LinkIcon, Trash2, X } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 
@@ -26,13 +26,48 @@ type UploadMethod = 'direct' | 'chunked' | 'traditional' | 'hls';
 
 export default function HomePage() {
   const router = useRouter();
-  const [videos, setVideos] = React.useState<VideoInfo[]>([]);
+  const [videos, setVideos] = React.useState<VideoInfo[]>(() => {
+    // Load videos from localStorage on initial render
+    if (typeof window !== 'undefined') {
+      const savedVideos = localStorage.getItem('beemmeup-videos');
+      if (savedVideos) {
+        try {
+          return JSON.parse(savedVideos);
+        } catch (e) {
+          console.error('Error loading saved videos:', e);
+        }
+      }
+    }
+    return [];
+  });
   const [selectedFile, setSelectedFile] = React.useState<File | null>(null);
   const [isUploading, setIsUploading] = React.useState(false);
   const [selectedMethod, setSelectedMethod] = React.useState<UploadMethod>('direct');
   const [autoAnalyze, setAutoAnalyze] = React.useState(false);
   const [hlsUrl, setHlsUrl] = React.useState('');
   const fileInputRef = React.useRef<HTMLInputElement>(null);
+
+  // Save videos to localStorage whenever they change
+  React.useEffect(() => {
+    if (videos.length > 0) {
+      localStorage.setItem('beemmeup-videos', JSON.stringify(videos));
+    }
+  }, [videos]);
+
+  // Delete a single video
+  const deleteVideo = React.useCallback((videoId: string) => {
+    setVideos(prev => prev.filter(v => v.id !== videoId));
+    // If no videos left, clear localStorage
+    if (videos.length === 1) {
+      localStorage.removeItem('beemmeup-videos');
+    }
+  }, [videos.length]);
+
+  // Clear all videos
+  const clearAllVideos = React.useCallback(() => {
+    setVideos([]);
+    localStorage.removeItem('beemmeup-videos');
+  }, []);
 
   // Poll for video status updates
   React.useEffect(() => {
@@ -50,6 +85,28 @@ export default function HomePage() {
                   ? { ...v, status: 'ready', url: data.url, progress: 100 } 
                   : v
               ));
+            } else if (data.status === 'processing') {
+              // Update progress during processing
+              let newProgress = data.progress || video.progress || 50;
+              
+              // If we're stuck at 50% and have a processingState, increment slowly
+              if (newProgress === 50 && data.processingState === 'RUNNING' && video.progress >= 50) {
+                // Increment by 10% every 10 seconds (1% per second), up to 85%
+                newProgress = Math.min(85, video.progress + 10);
+              }
+              
+              console.log(`Updating video ${video.id} progress from ${video.progress}% to ${newProgress}%`);
+              setVideos(prev => prev.map(v => 
+                v.id === video.id 
+                  ? { ...v, progress: newProgress } 
+                  : v
+              ));
+            } else if (data.status === 'error') {
+              setVideos(prev => prev.map(v => 
+                v.id === video.id 
+                  ? { ...v, status: 'error', error: data.error || 'Processing failed' } 
+                  : v
+              ));
             }
           }
         } catch (error) {
@@ -61,20 +118,23 @@ export default function HomePage() {
     // Only run if there are videos being processed
     if (videos.some(v => v.status === 'processing')) {
       checkVideoStatus();
-      const interval = setInterval(checkVideoStatus, 5000); // Check every 5 seconds
+      const interval = setInterval(checkVideoStatus, 10000); // Check every 10 seconds
       return () => clearInterval(interval);
     }
   }, [videos]);
 
   // Add video to the list (called from child components)
   const addVideo = React.useCallback((videoInfo: VideoInfo) => {
-    console.log('Adding video:', videoInfo);
-    setVideos(prev => [videoInfo, ...prev]);
+    setVideos(prev => {
+      const newVideos = [videoInfo, ...prev];
+      // Update localStorage with the new video
+      localStorage.setItem('beemmeup-videos', JSON.stringify(newVideos));
+      return newVideos;
+    });
   }, []);
 
   // Update video status (called from child components)
   const updateVideo = React.useCallback((videoId: string, updates: Partial<VideoInfo>) => {
-    console.log('Updating video:', videoId, updates);
     setVideos(prev => {
       const newVideos = prev.map(v => 
       v.id === videoId ? { ...v, ...updates } : v
@@ -536,6 +596,20 @@ export default function HomePage() {
         </Card>
 
         {/* Videos List */}
+        {videos.length > 0 && (
+          <div className="mb-6 flex items-center justify-between">
+            <h2 className="text-2xl font-semibold text-white">Upload History</h2>
+            <Button
+              onClick={clearAllVideos}
+              variant="ghost"
+              className="text-red-400 hover:text-red-300 hover:bg-red-500/20"
+            >
+              <Trash2 className="mr-2 h-4 w-4" />
+              Clear All
+            </Button>
+          </div>
+        )}
+        
         <div className="space-y-6">
           {videos.map(video => (
             <Card key={video.id} className="bg-white/10 backdrop-blur-lg border-white/20">
@@ -570,12 +644,35 @@ export default function HomePage() {
                         <span className="text-sm text-red-400">Error</span>
                       </>
                     )}
+                    <Button
+                      onClick={() => deleteVideo(video.id)}
+                      variant="ghost"
+                      size="icon"
+                      className="ml-2 text-gray-400 hover:text-red-400 hover:bg-red-500/20"
+                    >
+                      <X className="h-4 w-4" />
+                    </Button>
                   </div>
                 </div>
               </CardHeader>
               <CardContent>
                 {(video.status === 'uploading' || video.status === 'processing') && (
-                  <Progress value={video.progress} className="mb-4" />
+                  <div className="mb-4">
+                    <Progress value={video.progress} className="mb-2" />
+                    <div className="flex justify-between text-sm">
+                      <span className="text-gray-300">
+                        {video.status === 'uploading' ? 'Uploading' : 'Processing'} video...
+                        {video.status === 'processing' && video.progress > 50 && video.progress < 100 && (
+                          <span className="text-xs text-gray-400 ml-2">
+                            ({video.progress < 60 ? 'Initializing' : video.progress < 90 ? 'Transcoding' : 'Finalizing'})
+                          </span>
+                        )}
+                      </span>
+                      <span className="text-yellow-400 font-semibold">
+                        {Math.round(video.progress)}%
+                      </span>
+                    </div>
+                  </div>
                 )}
                 
                 {video.status === 'error' && (
