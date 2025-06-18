@@ -4,8 +4,47 @@ import React, { useEffect, useState, useRef } from 'react';
 import { useParams } from 'next/navigation';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { ArrowLeft, FileVideo, List, Clock, HardDrive, Zap, FileText, Play, Download, ExternalLink, Loader2, Pause, SkipForward, SkipBack } from 'lucide-react';
+import { ArrowLeft, FileVideo, List, Clock, HardDrive, Zap, FileText, Play, Download, ExternalLink, Loader2, Pause, SkipForward, SkipBack, Terminal, CheckCircle, XCircle, AlertCircle, Cpu, Film, Music, BarChart3, BookOpen, Info } from 'lucide-react';
 import Link from 'next/link';
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+
+// Info popover component
+interface InfoPopoverProps {
+  title: string;
+  description: string;
+  specLink?: string;
+  specSection?: string;
+}
+
+const InfoPopover: React.FC<InfoPopoverProps> = ({ title, description, specLink, specSection }) => (
+  <Popover>
+    <PopoverTrigger asChild>
+      <button className="inline-flex items-center justify-center w-4 h-4 rounded-full bg-gray-600 hover:bg-gray-500 transition-colors">
+        <Info className="h-2.5 w-2.5 text-gray-200" />
+      </button>
+    </PopoverTrigger>
+    <PopoverContent className="w-80 bg-gray-800 border-gray-700">
+      <div className="space-y-2">
+        <h4 className="font-semibold text-white">{title}</h4>
+        <p className="text-sm text-gray-300">{description}</p>
+        {specLink && (
+          <Link 
+            href={specLink} 
+            target="_blank" 
+            className="text-xs text-blue-400 hover:text-blue-300 flex items-center gap-1"
+          >
+            <span>HLS Spec {specSection && `§${specSection}`}</span>
+            <ExternalLink className="h-3 w-3" />
+          </Link>
+        )}
+      </div>
+    </PopoverContent>
+  </Popover>
+);
 
 interface VideoMetadata {
   id: string;
@@ -49,6 +88,58 @@ interface ParsedManifest {
   }>;
 }
 
+interface ProbeData {
+  raw: any;
+  analysis: {
+    format: any;
+    video: any;
+    audio: any;
+    packets: any;
+    frames: any;
+    hls: {
+      compliant: boolean;
+      issues: string[];
+      recommendations: string[];
+      specs: Array<{
+        section: string;
+        description: string;
+        url: string;
+      }>;
+    };
+  };
+  segmentUrl: string;
+}
+
+interface BatchProbeData {
+  results: Array<{
+    url: string;
+    success: boolean;
+    error?: string;
+    raw?: any;
+    analysis?: any;
+  }>;
+  aggregateAnalysis: {
+    totalSegments: number;
+    consistency: {
+      duration: { min: number; max: number; avg: number; consistent: boolean };
+      bitrate: { min: number; max: number; avg: number; consistent: boolean };
+      resolution: string[];
+      codecs: { video: string[]; audio: string[] };
+    };
+    averages: {
+      duration: number;
+      bitrate: number;
+      keyframeInterval: number;
+    };
+    issues: {
+      total: number;
+      byType: Record<string, number>;
+    };
+    recommendations: string[];
+  };
+  batchMode: boolean;
+}
+
 // Import HLS.js dynamically to avoid SSR issues
 let Hls: any = null;
 if (typeof window !== 'undefined') {
@@ -71,6 +162,15 @@ export default function VideoAnalyzePage() {
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
   const [currentSegmentIndex, setCurrentSegmentIndex] = useState<number | null>(null);
+  const [probeData, setProbeData] = useState<ProbeData | null>(null);
+  const [probingSegment, setProbingSegment] = useState(false);
+  const [showProbeResults, setShowProbeResults] = useState(false);
+  const [batchProbeData, setBatchProbeData] = useState<BatchProbeData | null>(null);
+  const [probingBatch, setProbingBatch] = useState(false);
+  const [showBatchResults, setShowBatchResults] = useState(false);
+  const [detailedAnalysis, setDetailedAnalysis] = useState(false);
+  const [probeCache, setProbeCache] = useState<Record<string, ProbeData>>({});
+  const [autoplayEnabled, setAutoplayEnabled] = useState(false);
   const videoRef = useRef<HTMLVideoElement>(null);
   const hlsRef = useRef<any>(null);
 
@@ -395,6 +495,11 @@ export default function VideoAnalyzePage() {
     
     videoRef.current.currentTime = targetTime;
     setSelectedSegment(parsedManifest.segments[segmentIndex]);
+    
+    // Only autoplay if enabled
+    if (autoplayEnabled && videoRef.current.paused) {
+      videoRef.current.play();
+    }
   };
 
   // Playback controls
@@ -421,6 +526,175 @@ export default function VideoAnalyzePage() {
       jumpToSegment(prevIndex);
     }
   };
+
+  // Probe segment with ffprobe
+  const probeSegment = async (segment: Segment, forceRefresh: boolean = false) => {
+    // Check cache first (unless force refresh is requested)
+    const cacheKey = `${segment.index}-${segment.uri}`;
+    if (!forceRefresh && probeCache[cacheKey]) {
+      console.log('[Probe] Using cached result for segment', segment.index);
+      setProbeData(probeCache[cacheKey]);
+      setShowProbeResults(true);
+      return;
+    }
+
+    setProbingSegment(true);
+    setProbeData(null);
+    setShowProbeResults(true);
+    
+    try {
+      // Construct full segment URL
+      const segmentUrl = new URL(segment.uri, selectedManifest).href;
+      
+      const response = await fetch(`/api/video/${videoId}/probe-segment`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ 
+          segmentUrl,
+          detailed: detailedAnalysis,
+          byteRange: segment.byteRange, // Pass byte range if available
+          segmentDuration: segment.duration // Pass segment duration from manifest
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to probe segment');
+      }
+
+      const data = await response.json();
+      setProbeData(data);
+      
+      // Cache the result
+      setProbeCache(prev => ({
+        ...prev,
+        [cacheKey]: data
+      }));
+    } catch (error) {
+      console.error('Error probing segment:', error);
+      setError('Failed to probe segment');
+    } finally {
+      setProbingSegment(false);
+    }
+  };
+
+  // Probe all segments in batch
+  const probeBatchSegments = async () => {
+    if (!parsedManifest?.segments || parsedManifest.segments.length === 0) return;
+    
+    setProbingBatch(true);
+    setBatchProbeData(null);
+    setShowBatchResults(true);
+    
+    try {
+      // Construct segment data with URLs, byte ranges, and durations
+      const segmentData = parsedManifest.segments.map(segment => {
+        const url = new URL(segment.uri, selectedManifest).href;
+        return {
+          url,
+          byteRange: segment.byteRange,
+          duration: segment.duration
+        };
+      });
+      
+      console.log('[Batch Probe] Analyzing', segmentData.length, 'segments');
+      
+      const response = await fetch(`/api/video/${videoId}/probe-segment`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ 
+          segmentUrls: segmentData,
+          batchMode: true 
+        }),
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('[Batch Probe] Error response:', errorText);
+        throw new Error('Failed to probe segments');
+      }
+
+      const data = await response.json();
+      console.log('[Batch Probe] Received data:', data);
+      setBatchProbeData(data);
+      
+      // Cache individual segment results if available
+      if (data.results) {
+        data.results.forEach((result: any, index: number) => {
+          if (result.success && result.analysis) {
+            const segment = parsedManifest.segments[index];
+            const cacheKey = `${segment.index}-${segment.uri}`;
+            setProbeCache(prev => ({
+              ...prev,
+              [cacheKey]: {
+                raw: result.raw,
+                analysis: result.analysis,
+                segmentUrl: result.url
+              }
+            }));
+          }
+        });
+      }
+    } catch (error) {
+      console.error('[Batch Probe] Error:', error);
+      setError(error instanceof Error ? error.message : 'Failed to probe segments');
+    } finally {
+      setProbingBatch(false);
+    }
+  };
+
+  // Export analysis data
+  const exportAnalysisData = () => {
+    const data = {
+      timestamp: new Date().toISOString(),
+      videoId,
+      manifest: selectedManifest,
+      parsedManifest,
+      probeData,
+      batchProbeData
+    };
+    
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `hls-analysis-${videoId}-${Date.now()}.json`;
+    document.body.appendChild(a);
+    a.click();
+    window.URL.revokeObjectURL(url);
+    document.body.removeChild(a);
+  };
+
+  // Update useEffect to check cache when selecting a segment
+  useEffect(() => {
+    if (selectedSegment) {
+      const cacheKey = `${selectedSegment.index}-${selectedSegment.uri}`;
+      if (probeCache[cacheKey]) {
+        setProbeData(probeCache[cacheKey]);
+        setShowProbeResults(true);
+      } else {
+        // Clear previous probe data if no cache exists for this segment
+        setProbeData(null);
+        setShowProbeResults(false);
+      }
+    } else {
+      // Clear probe data when no segment is selected
+      setProbeData(null);
+      setShowProbeResults(false);
+    }
+  }, [selectedSegment, probeCache]);
+
+  // Clear cache when changing manifests
+  useEffect(() => {
+    setProbeCache({});
+    setProbeData(null);
+    setBatchProbeData(null);
+    setShowProbeResults(false);
+    setShowBatchResults(false);
+  }, [selectedManifest]);
 
   if (loading) {
     return (
@@ -706,6 +980,23 @@ export default function VideoAnalyzePage() {
                 </div>
               </CardContent>
             </Card>
+
+            {/* Raw Manifest */}
+            {manifestContent && selectedManifest?.endsWith('.m3u8') && (
+              <Card className="bg-white/10 backdrop-blur-lg border-white/20 mt-6">
+                <CardHeader>
+                  <CardTitle className="text-white flex items-center gap-2">
+                    <FileText className="h-5 w-5" />
+                    Raw Manifest
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <pre className="bg-black/30 text-gray-300 p-4 rounded-lg overflow-x-auto text-xs font-mono max-h-96">
+                    {manifestContent}
+                  </pre>
+                </CardContent>
+              </Card>
+            )}
           </div>
 
           {/* Manifest Content */}
@@ -727,14 +1018,30 @@ export default function VideoAnalyzePage() {
                       {/* Manifest Overview */}
                       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                         <div className="bg-white/5 p-4 rounded-lg">
-                          <p className="text-sm text-gray-400">Version</p>
+                          <p className="text-sm text-gray-400 flex items-center gap-1">
+                            Version
+                            <InfoPopover
+                              title="HLS Version"
+                              description="The version of the HLS protocol used in this playlist. Higher versions support more features but may have less device compatibility."
+                              specLink="https://datatracker.ietf.org/doc/html/rfc8216#section-4.3.1.2"
+                              specSection="4.3.1.2"
+                            />
+                          </p>
                           <p className="text-xl font-mono text-white">
                             {parsedManifest.version}
                           </p>
                         </div>
                         {parsedManifest.targetDuration > 0 && (
                           <div className="bg-white/5 p-4 rounded-lg">
-                            <p className="text-sm text-gray-400">Target Duration</p>
+                            <p className="text-sm text-gray-400 flex items-center gap-1">
+                              Target Duration
+                              <InfoPopover
+                                title="Target Duration"
+                                description="The maximum duration in seconds of any media segment. This value helps players buffer appropriately and must be at least as large as the longest segment."
+                                specLink="https://datatracker.ietf.org/doc/html/rfc8216#section-4.3.3.1"
+                                specSection="4.3.3.1"
+                              />
+                            </p>
                             <p className="text-xl font-mono text-white">
                               {parsedManifest.targetDuration}s
                             </p>
@@ -742,7 +1049,15 @@ export default function VideoAnalyzePage() {
                         )}
                         {parsedManifest.totalDuration > 0 && (
                           <div className="bg-white/5 p-4 rounded-lg">
-                            <p className="text-sm text-gray-400">Total Duration</p>
+                            <p className="text-sm text-gray-400 flex items-center gap-1">
+                              Total Duration
+                              <InfoPopover
+                                title="Total Duration"
+                                description="The sum of all segment durations. This represents the complete length of the media stream."
+                                specLink="https://datatracker.ietf.org/doc/html/rfc8216#section-3"
+                                specSection="3"
+                              />
+                            </p>
                             <p className="text-xl font-mono text-white">
                               {formatDuration(parsedManifest.totalDuration)}
                             </p>
@@ -750,7 +1065,15 @@ export default function VideoAnalyzePage() {
                         )}
                         {parsedManifest.segments.length > 0 && (
                           <div className="bg-white/5 p-4 rounded-lg">
-                            <p className="text-sm text-gray-400">Segments</p>
+                            <p className="text-sm text-gray-400 flex items-center gap-1">
+                              Segments
+                              <InfoPopover
+                                title="Media Segments"
+                                description="The number of media segments in this playlist. Each segment contains a portion of the media stream that can be independently downloaded and played."
+                                specLink="https://datatracker.ietf.org/doc/html/rfc8216#section-3"
+                                specSection="3"
+                              />
+                            </p>
                             <p className="text-xl font-mono text-white">
                               {parsedManifest.segments.length}
                             </p>
@@ -799,10 +1122,41 @@ export default function VideoAnalyzePage() {
                       {/* Segments for Media Playlist */}
                       {parsedManifest.segments.length > 0 && (
                         <div>
-                          <h3 className="text-white font-semibold mb-3 flex items-center gap-2">
-                            <HardDrive className="h-4 w-4" />
-                            Segments Timeline
-                          </h3>
+                          <div className="flex items-center justify-between mb-3">
+                            <h3 className="text-white font-semibold flex items-center gap-2">
+                              <HardDrive className="h-4 w-4" />
+                              Segments Timeline
+                            </h3>
+                            <div className="flex gap-2">
+                              <Button
+                                size="sm"
+                                className="bg-purple-600 hover:bg-purple-700"
+                                onClick={probeBatchSegments}
+                                disabled={probingBatch}
+                              >
+                                {probingBatch ? (
+                                  <>
+                                    <Loader2 className="h-3 w-3 mr-1 animate-spin" />
+                                    Analyzing...
+                                  </>
+                                ) : (
+                                  <>
+                                    <BarChart3 className="h-3 w-3 mr-1" />
+                                    Analyze All Segments
+                                  </>
+                                )}
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                className="text-purple-300 hover:text-purple-200"
+                                onClick={exportAnalysisData}
+                              >
+                                <Download className="h-3 w-3 mr-1" />
+                                Export
+                              </Button>
+                            </div>
+                          </div>
                           
                           {/* Visual Timeline */}
                           <div className="bg-black/30 rounded-lg p-4 mb-4">
@@ -838,6 +1192,10 @@ export default function VideoAnalyzePage() {
                                     }}
                                     title={`Segment #${segment.index}: ${segment.duration.toFixed(3)}s • Click to jump`}
                                   >
+                                    {/* Analyzed indicator */}
+                                    {probeCache[`${segment.index}-${segment.uri}`] && (
+                                      <div className="absolute top-0 right-0 w-2 h-2 bg-green-400 rounded-full m-1" />
+                                    )}
                                     <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
                                       <span className="text-xs text-white font-bold drop-shadow-lg">
                                         #{segment.index}
@@ -864,7 +1222,11 @@ export default function VideoAnalyzePage() {
                               <div className="flex justify-between items-start mb-2">
                                 <h4 className="text-white font-semibold">Segment Details</h4>
                                 <button
-                                  onClick={() => setSelectedSegment(null)}
+                                  onClick={() => {
+                                    setSelectedSegment(null);
+                                    setShowProbeResults(false);
+                                    setProbeData(null);
+                                  }}
                                   className="text-gray-400 hover:text-white"
                                 >
                                   <span className="text-sm">✕</span>
@@ -906,53 +1268,610 @@ export default function VideoAnalyzePage() {
                                   {selectedSegment.uri}
                                 </p>
                               </div>
+                              {selectedSegment.byteRange && (
+                                <div className="mt-3">
+                                  <p className="text-gray-400 text-sm mb-1">Byte Range</p>
+                                  <p className="text-white font-mono text-xs bg-black/30 p-2 rounded">
+                                    {selectedSegment.byteRange.length} bytes @ offset {selectedSegment.byteRange.offset}
+                                  </p>
+                                </div>
+                              )}
+                              <div className="mt-3 flex gap-2">
+                                <Button
+                                  size="sm"
+                                  className="bg-purple-600 hover:bg-purple-700"
+                                  onClick={() => probeSegment(selectedSegment, true)}
+                                  disabled={probingSegment}
+                                >
+                                  {probingSegment ? (
+                                    <>
+                                      <Loader2 className="h-3 w-3 mr-1 animate-spin" />
+                                      Probing...
+                                    </>
+                                  ) : (
+                                    <>
+                                      <Terminal className="h-3 w-3 mr-1" />
+                                      {probeCache[`${selectedSegment.index}-${selectedSegment.uri}`] ? 'Re-analyze with FFprobe' : 'Probe with FFprobe'}
+                                    </>
+                                  )}
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  className="text-purple-300 hover:text-purple-200"
+                                  onClick={() => {
+                                    // Jump to segment if not already there
+                                    if (currentSegmentIndex !== selectedSegment.index) {
+                                      jumpToSegment(selectedSegment.index);
+                                    }
+                                    // Toggle play/pause
+                                    togglePlayPause();
+                                  }}
+                                >
+                                  {isPlaying && currentSegmentIndex === selectedSegment.index ? (
+                                    <>
+                                      <Pause className="h-3 w-3 mr-1" />
+                                      Pause
+                                    </>
+                                  ) : (
+                                    <>
+                                      <Play className="h-3 w-3 mr-1" />
+                                      Play
+                                    </>
+                                  )}
+                                </Button>
+                              </div>
+                              
+                              {/* Analysis Options */}
+                              <div className="mt-3 flex items-center gap-4">
+                                <label className="flex items-center gap-2 text-xs text-gray-400 cursor-pointer">
+                                  <input
+                                    type="checkbox"
+                                    checked={detailedAnalysis}
+                                    onChange={(e) => setDetailedAnalysis(e.target.checked)}
+                                    className="w-3 h-3 rounded border-gray-600 bg-gray-700 text-purple-600 focus:ring-purple-500 focus:ring-offset-0"
+                                  />
+                                  <span>Detailed frame analysis (slower)</span>
+                                </label>
+                                <label className="flex items-center gap-2 text-xs text-gray-400 cursor-pointer">
+                                  <input
+                                    type="checkbox"
+                                    checked={autoplayEnabled}
+                                    onChange={(e) => setAutoplayEnabled(e.target.checked)}
+                                    className="w-3 h-3 rounded border-gray-600 bg-gray-700 text-purple-600 focus:ring-purple-500 focus:ring-offset-0"
+                                  />
+                                  <span>Autoplay on segment select</span>
+                                </label>
+                              </div>
+                            </div>
+                          )}
+                          
+                          {/* FFprobe Results */}
+                          {showProbeResults && (
+                            <div className="bg-white/5 rounded-lg p-4 mb-4 border border-purple-500/30">
+                              <h4 className="text-white font-semibold mb-3 flex items-center gap-2">
+                                <Terminal className="h-4 w-4" />
+                                FFprobe Analysis
+                                {!detailedAnalysis && (
+                                  <span className="text-xs text-gray-400 ml-2">(Basic Mode)</span>
+                                )}
+                              </h4>
+                              
+                              {probingSegment ? (
+                                <div className="flex items-center justify-center py-8">
+                                  <Loader2 className="h-6 w-6 text-purple-400 animate-spin" />
+                                  <span className="ml-2 text-gray-300">Analyzing segment...</span>
+                                </div>
+                              ) : probeData ? (
+                                <div className="space-y-4">
+                                  {/* HLS Compliance Status */}
+                                  <div className="bg-black/30 rounded-lg p-3">
+                                    <h5 className="text-sm font-semibold text-gray-300 mb-2">HLS Compliance</h5>
+                                    <div className="flex items-center gap-2 mb-2">
+                                      {probeData.analysis.hls.compliant ? (
+                                        <CheckCircle className="h-4 w-4 text-green-400" />
+                                      ) : (
+                                        <XCircle className="h-4 w-4 text-red-400" />
+                                      )}
+                                      <span className={`text-sm ${probeData.analysis.hls.compliant ? 'text-green-400' : 'text-red-400'}`}>
+                                        {probeData.analysis.hls.compliant ? 'HLS Compliant' : 'HLS Compliance Issues Found'}
+                                      </span>
+                                    </div>
+                                    {probeData.analysis.hls.issues && probeData.analysis.hls.issues.length > 0 && (
+                                      <div className="mt-2">
+                                        {probeData.analysis.hls.issues.map((issue: string, idx: number) => (
+                                          <div key={idx} className="flex items-start gap-1 text-xs text-red-400 mt-1">
+                                            <AlertCircle className="h-3 w-3 mt-0.5 flex-shrink-0" />
+                                            <span>{issue}</span>
+                                          </div>
+                                        ))}
+                                      </div>
+                                    )}
+                                  </div>
+
+                                  {/* Format Information */}
+                                  <div className="bg-black/30 rounded-lg p-3">
+                                    <h5 className="text-sm font-semibold text-gray-300 mb-2 flex items-center gap-1">
+                                      <HardDrive className="h-3 w-3" />
+                                      Format
+                                    </h5>
+                                    <div className="grid grid-cols-2 gap-2 text-xs">
+                                      <div>
+                                        <span className="text-gray-400 flex items-center gap-1">
+                                          Container:
+                                          <InfoPopover
+                                            title="Container Format"
+                                            description="The media container format. HLS typically uses MPEG-TS (.ts) for compatibility or fMP4 for newer implementations."
+                                            specLink="https://datatracker.ietf.org/doc/html/rfc8216#section-3.1"
+                                            specSection="3.1"
+                                          />
+                                        </span>
+                                        <span className="text-white ml-1 font-mono">{probeData.analysis.format.formatName}</span>
+                                      </div>
+                                      <div>
+                                        <span className="text-gray-400 flex items-center gap-1">
+                                          Duration:
+                                          <InfoPopover
+                                            title="Segment Duration"
+                                            description="The exact duration of this segment. Should be close to the target duration specified in the playlist."
+                                            specLink="https://datatracker.ietf.org/doc/html/rfc8216#section-4.3.3.1"
+                                            specSection="4.3.3.1"
+                                          />
+                                        </span>
+                                        <span className="text-white ml-1 font-mono">{probeData.analysis.format.duration.toFixed(3)}s</span>
+                                      </div>
+                                      <div>
+                                        <span className="text-gray-400 flex items-center gap-1">
+                                          Size:
+                                          <InfoPopover
+                                            title="Segment Size"
+                                            description="The file size of this segment. Affects bandwidth requirements and download time."
+                                          />
+                                        </span>
+                                        <span className="text-white ml-1 font-mono">{formatBytes(probeData.analysis.format.size)}</span>
+                                      </div>
+                                      <div>
+                                        <span className="text-gray-400 flex items-center gap-1">
+                                          Bitrate:
+                                          <InfoPopover
+                                            title="Average Bitrate"
+                                            description="The average bitrate of this segment. Should match the declared bandwidth in the master playlist."
+                                            specLink="https://datatracker.ietf.org/doc/html/rfc8216#section-4.3.4.2"
+                                            specSection="4.3.4.2"
+                                          />
+                                        </span>
+                                        <span className="text-white ml-1 font-mono">{(probeData.analysis.format.bitRate / 1000).toFixed(0)} kbps</span>
+                                      </div>
+                                    </div>
+                                  </div>
+
+                                  {/* Video Stream Information */}
+                                  {probeData.analysis.video && Object.keys(probeData.analysis.video).length > 0 && (
+                                    <div className="bg-black/30 rounded-lg p-3">
+                                      <h5 className="text-sm font-semibold text-gray-300 mb-2 flex items-center gap-1">
+                                        <Film className="h-3 w-3" />
+                                        Video Stream
+                                      </h5>
+                                      <div className="grid grid-cols-2 gap-2 text-xs">
+                                        <div>
+                                          <span className="text-gray-400 flex items-center gap-1">
+                                            Codec:
+                                            <InfoPopover
+                                              title="Video Codec"
+                                              description="The video compression format. HLS supports H.264 (AVC) for broad compatibility and H.265 (HEVC) for better efficiency."
+                                              specLink="https://datatracker.ietf.org/doc/html/rfc8216#section-4.3.4.2"
+                                              specSection="4.3.4.2"
+                                            />
+                                          </span>
+                                          <span className="text-white ml-1 font-mono">{probeData.analysis.video.codecName} ({probeData.analysis.video.profile})</span>
+                                        </div>
+                                        <div>
+                                          <span className="text-gray-400 flex items-center gap-1">
+                                            Resolution:
+                                            <InfoPopover
+                                              title="Video Resolution"
+                                              description="The video dimensions in pixels (width × height). Higher resolutions provide better quality but require more bandwidth."
+                                            />
+                                          </span>
+                                          <span className="text-white ml-1 font-mono">{probeData.analysis.video.width}x{probeData.analysis.video.height}</span>
+                                        </div>
+                                        <div>
+                                          <span className="text-gray-400 flex items-center gap-1">
+                                            Frame Rate:
+                                            <InfoPopover
+                                              title="Frame Rate"
+                                              description="Frames per second. Common values are 24, 25, 30, or 60 fps. Higher rates provide smoother motion."
+                                            />
+                                          </span>
+                                          <span className="text-white ml-1 font-mono">{probeData.analysis.video.avgFrameRate}</span>
+                                        </div>
+                                        <div>
+                                          <span className="text-gray-400 flex items-center gap-1">
+                                            Pixel Format:
+                                            <InfoPopover
+                                              title="Pixel Format"
+                                              description="The color encoding format. YUV420P is standard for video compression, providing good quality with efficient storage."
+                                            />
+                                          </span>
+                                          <span className="text-white ml-1 font-mono">{probeData.analysis.video.pixFmt}</span>
+                                        </div>
+                                        <div>
+                                          <span className="text-gray-400 flex items-center gap-1">
+                                            Level:
+                                            <InfoPopover
+                                              title="Codec Level"
+                                              description="The H.264/H.265 level defines maximum bitrate and resolution. Higher levels support larger resolutions but may have compatibility issues."
+                                              specLink="https://www.itu.int/rec/T-REC-H.264"
+                                            />
+                                          </span>
+                                          <span className="text-white ml-1 font-mono">{probeData.analysis.video.level}</span>
+                                        </div>
+                                        <div>
+                                          <span className="text-gray-400 flex items-center gap-1">
+                                            Ref Frames:
+                                            <InfoPopover
+                                              title="Reference Frames"
+                                              description="Number of previous frames used for compression. More reference frames improve quality but increase decoder complexity."
+                                            />
+                                          </span>
+                                          <span className="text-white ml-1 font-mono">{probeData.analysis.video.refs}</span>
+                                        </div>
+                                      </div>
+                                    </div>
+                                  )}
+
+                                  {/* Audio Stream Information */}
+                                  {probeData.analysis.audio && Object.keys(probeData.analysis.audio).length > 0 && (
+                                    <div className="bg-black/30 rounded-lg p-3">
+                                      <h5 className="text-sm font-semibold text-gray-300 mb-2 flex items-center gap-1">
+                                        <Music className="h-3 w-3" />
+                                        Audio Stream
+                                      </h5>
+                                      <div className="grid grid-cols-2 gap-2 text-xs">
+                                        <div>
+                                          <span className="text-gray-400 flex items-center gap-1">
+                                            Codec:
+                                            <InfoPopover
+                                              title="Audio Codec"
+                                              description="The audio compression format. AAC is most common for HLS, with MP3, AC-3, and E-AC-3 also supported."
+                                              specLink="https://datatracker.ietf.org/doc/html/rfc8216#section-4.3.4.2"
+                                              specSection="4.3.4.2"
+                                            />
+                                          </span>
+                                          <span className="text-white ml-1 font-mono">{probeData.analysis.audio.codecName}</span>
+                                        </div>
+                                        <div>
+                                          <span className="text-gray-400 flex items-center gap-1">
+                                            Sample Rate:
+                                            <InfoPopover
+                                              title="Sample Rate"
+                                              description="Audio samples per second. 48000 Hz is standard for video, 44100 Hz for music. Higher rates capture more audio detail."
+                                            />
+                                          </span>
+                                          <span className="text-white ml-1 font-mono">{probeData.analysis.audio.sampleRate} Hz</span>
+                                        </div>
+                                        <div>
+                                          <span className="text-gray-400 flex items-center gap-1">
+                                            Channels:
+                                            <InfoPopover
+                                              title="Audio Channels"
+                                              description="Number and layout of audio channels. Stereo (2 channels) is most common, with 5.1 surround supported for premium content."
+                                            />
+                                          </span>
+                                          <span className="text-white ml-1 font-mono">{probeData.analysis.audio.channels} ({probeData.analysis.audio.channelLayout})</span>
+                                        </div>
+                                        <div>
+                                          <span className="text-gray-400 flex items-center gap-1">
+                                            Bitrate:
+                                            <InfoPopover
+                                              title="Audio Bitrate"
+                                              description="The amount of data used per second for audio. Higher bitrates provide better quality. 128-192 kbps is typical for stereo AAC."
+                                            />
+                                          </span>
+                                          <span className="text-white ml-1 font-mono">{probeData.analysis.audio.bitRate ? (probeData.analysis.audio.bitRate / 1000).toFixed(0) + ' kbps' : 'N/A'}</span>
+                                        </div>
+                                      </div>
+                                    </div>
+                                  )}
+
+                                  {/* Packet/Frame Analysis */}
+                                  <div className="bg-black/30 rounded-lg p-3">
+                                    <h5 className="text-sm font-semibold text-gray-300 mb-2 flex items-center gap-1">
+                                      <Cpu className="h-3 w-3" />
+                                      Packet/Frame Analysis
+                                    </h5>
+                                    {probeData.analysis.frames?.estimated ? (
+                                      <div className="text-xs space-y-1">
+                                        <div className="flex justify-between">
+                                          <span className="text-gray-400">Video Frames:</span>
+                                          <span className="text-white font-mono">{probeData.analysis.frames.video}</span>
+                                        </div>
+                                        <p className="text-yellow-300 text-xs italic mt-2">{probeData.analysis.frames.note}</p>
+                                        <p className="text-gray-500 text-xs">Enable "Detailed frame analysis" for complete frame/packet information</p>
+                                      </div>
+                                    ) : (
+                                      <div className="space-y-2">
+                                        <div className="grid grid-cols-2 gap-2 text-xs">
+                                          <div>
+                                            <span className="text-gray-400">Total Frames:</span>
+                                            <span className="text-white ml-1 font-mono">{probeData.analysis.frames?.total || 'N/A'}</span>
+                                          </div>
+                                          <div>
+                                            <span className="text-gray-400">Video Frames:</span>
+                                            <span className="text-white ml-1 font-mono">{probeData.analysis.frames?.video || 'N/A'}</span>
+                                          </div>
+                                          <div>
+                                            <span className="text-gray-400">Keyframes:</span>
+                                            <span className="text-white ml-1 font-mono">{probeData.analysis.frames?.keyFrames || 'N/A'}</span>
+                                          </div>
+                                          <div>
+                                            <span className="text-gray-400">Avg Keyframe Interval:</span>
+                                            <span className="text-white ml-1 font-mono">
+                                              {probeData.analysis.frames?.avgKeyFrameInterval 
+                                                ? (probeData.analysis.frames.avgKeyFrameInterval / 1000000).toFixed(2) + 's' 
+                                                : 'N/A'}
+                                            </span>
+                                          </div>
+                                        </div>
+                                        {probeData.analysis.frames?.keyFramePositions && (
+                                          <div className="mt-2">
+                                            <span className="text-gray-400 text-xs">Keyframe Positions:</span>
+                                            <div className="text-white font-mono text-xs mt-1 grid grid-cols-3 gap-1">
+                                              {probeData.analysis.frames.keyFramePositions.slice(0, 6).map((kf: any, idx: number) => (
+                                                <span key={idx} className="bg-black/50 px-1 py-0.5 rounded">
+                                                  {kf.pts_time}s
+                                                </span>
+                                              ))}
+                                            </div>
+                                          </div>
+                                        )}
+                                      </div>
+                                    )}
+                                  </div>
+
+                                  {/* Recommendations */}
+                                  {probeData.analysis.hls.recommendations.length > 0 && (
+                                    <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-lg p-3">
+                                      <h5 className="text-sm font-semibold text-yellow-300 mb-2 flex items-center gap-1">
+                                        <AlertCircle className="h-3 w-3" />
+                                        Recommendations
+                                      </h5>
+                                      <ul className="space-y-1">
+                                        {probeData.analysis.hls.recommendations.map((rec, idx) => (
+                                          <li key={idx} className="text-xs text-yellow-200 flex items-start gap-1">
+                                            <span className="text-yellow-400">•</span>
+                                            <span>{rec}</span>
+                                          </li>
+                                        ))}
+                                      </ul>
+                                    </div>
+                                  )}
+
+                                  {/* HLS Spec References */}
+                                  {probeData.analysis.hls.specs && probeData.analysis.hls.specs.length > 0 && (
+                                    <div className="bg-blue-500/10 border border-blue-500/30 rounded-lg p-3">
+                                      <h5 className="text-sm font-semibold text-blue-300 mb-2 flex items-center gap-1">
+                                        <BookOpen className="h-3 w-3" />
+                                        HLS Specification References
+                                      </h5>
+                                      <div className="space-y-1">
+                                        {probeData.analysis.hls.specs.map((ref: any, idx: number) => (
+                                          <div key={idx} className="text-xs">
+                                            <Link 
+                                              href={ref.url} 
+                                              target="_blank"
+                                              className="text-blue-300 hover:text-blue-200 flex items-start gap-1"
+                                            >
+                                              <span className="text-blue-400">§{ref.section}</span>
+                                              <span>{ref.description}</span>
+                                              <ExternalLink className="h-2 w-2 flex-shrink-0 mt-0.5" />
+                                            </Link>
+                                          </div>
+                                        ))}
+                                      </div>
+                                    </div>
+                                  )}
+
+                                  {/* Raw Data Toggle */}
+                                  <details className="bg-black/30 rounded-lg p-3">
+                                    <summary className="text-sm font-semibold text-gray-300 cursor-pointer hover:text-white">
+                                      View Raw FFprobe Output
+                                    </summary>
+                                    <pre className="mt-2 text-xs text-gray-400 overflow-x-auto">
+                                      {JSON.stringify(probeData.raw, null, 2)}
+                                    </pre>
+                                  </details>
+                                </div>
+                              ) : (
+                                <div className="text-center text-gray-400 py-4">
+                                  <p className="text-sm">Select a segment and click "Probe with FFprobe" to analyze</p>
+                                </div>
+                              )}
+                            </div>
+                          )}
+                          
+                          {/* Batch Analysis Results */}
+                          {showBatchResults && batchProbeData && (
+                            <div className="bg-white/5 rounded-lg p-4 mb-4 border border-purple-500/30 mt-4">
+                              <h4 className="text-white font-semibold mb-3 flex items-center gap-2">
+                                <BarChart3 className="h-4 w-4" />
+                                Stream Analysis Report
+                              </h4>
+                              
+                              {probingBatch ? (
+                                <div className="flex items-center justify-center py-8">
+                                  <Loader2 className="h-6 w-6 text-purple-400 animate-spin" />
+                                  <span className="ml-2 text-gray-300">Analyzing {parsedManifest.segments.length} segments...</span>
+                                </div>
+                              ) : batchProbeData.aggregateAnalysis ? (
+                                <div className="space-y-4">
+                                  {/* Overview Stats */}
+                                  <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                                    <div className="bg-black/30 rounded-lg p-3">
+                                      <p className="text-xs text-gray-400">Total Segments</p>
+                                      <p className="text-lg font-mono text-white">{batchProbeData.aggregateAnalysis.totalSegments}</p>
+                                    </div>
+                                    <div className="bg-black/30 rounded-lg p-3">
+                                      <p className="text-xs text-gray-400">Avg Duration</p>
+                                      <p className="text-lg font-mono text-white">{batchProbeData.aggregateAnalysis.averages.duration.toFixed(2)}s</p>
+                                    </div>
+                                    <div className="bg-black/30 rounded-lg p-3">
+                                      <p className="text-xs text-gray-400">Avg Bitrate</p>
+                                      <p className="text-lg font-mono text-white">{(batchProbeData.aggregateAnalysis.averages.bitrate / 1000000).toFixed(2)} Mbps</p>
+                                    </div>
+                                    <div className="bg-black/30 rounded-lg p-3">
+                                      <p className="text-xs text-gray-400">Total Issues</p>
+                                      <p className="text-lg font-mono text-white">{batchProbeData.aggregateAnalysis.issues.total}</p>
+                                    </div>
+                                  </div>
+
+                                  {/* Consistency Analysis */}
+                                  <div className="bg-black/30 rounded-lg p-3">
+                                    <h5 className="text-sm font-semibold text-gray-300 mb-2">Consistency Analysis</h5>
+                                    <div className="space-y-2">
+                                      <div className="flex items-center justify-between text-xs">
+                                        <span className="text-gray-400">Duration Consistency</span>
+                                        <div className="flex items-center gap-2">
+                                          {batchProbeData.aggregateAnalysis.consistency.duration.consistent ? (
+                                            <CheckCircle className="h-3 w-3 text-green-400" />
+                                          ) : (
+                                            <XCircle className="h-3 w-3 text-red-400" />
+                                          )}
+                                          <span className="text-white font-mono">
+                                            {batchProbeData.aggregateAnalysis.consistency.duration.min.toFixed(2)}s - {batchProbeData.aggregateAnalysis.consistency.duration.max.toFixed(2)}s
+                                          </span>
+                                        </div>
+                                      </div>
+                                      <div className="flex items-center justify-between text-xs">
+                                        <span className="text-gray-400">Bitrate Consistency</span>
+                                        <div className="flex items-center gap-2">
+                                          {batchProbeData.aggregateAnalysis.consistency.bitrate.consistent ? (
+                                            <CheckCircle className="h-3 w-3 text-green-400" />
+                                          ) : (
+                                            <XCircle className="h-3 w-3 text-red-400" />
+                                          )}
+                                          <span className="text-white font-mono">
+                                            {(batchProbeData.aggregateAnalysis.consistency.bitrate.min / 1000000).toFixed(1)} - {(batchProbeData.aggregateAnalysis.consistency.bitrate.max / 1000000).toFixed(1)} Mbps
+                                          </span>
+                                        </div>
+                                      </div>
+                                      <div className="flex items-center justify-between text-xs">
+                                        <span className="text-gray-400">Resolutions</span>
+                                        <span className="text-white font-mono">{batchProbeData.aggregateAnalysis.consistency.resolution.join(', ') || 'N/A'}</span>
+                                      </div>
+                                      <div className="flex items-center justify-between text-xs">
+                                        <span className="text-gray-400">Video Codecs</span>
+                                        <span className="text-white font-mono">{batchProbeData.aggregateAnalysis.consistency.codecs.video.join(', ') || 'N/A'}</span>
+                                      </div>
+                                      <div className="flex items-center justify-between text-xs">
+                                        <span className="text-gray-400">Audio Codecs</span>
+                                        <span className="text-white font-mono">{batchProbeData.aggregateAnalysis.consistency.codecs.audio.join(', ') || 'N/A'}</span>
+                                      </div>
+                                    </div>
+                                  </div>
+
+                                  {/* Issues Breakdown */}
+                                  {batchProbeData.aggregateAnalysis.issues.total > 0 && (
+                                    <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-3">
+                                      <h5 className="text-sm font-semibold text-red-300 mb-2">Issues Found</h5>
+                                      <div className="space-y-1">
+                                        {Object.entries(batchProbeData.aggregateAnalysis.issues.byType).map(([type, count]) => (
+                                          <div key={type} className="flex items-center justify-between text-xs">
+                                            <span className="text-red-200">{type}</span>
+                                            <span className="text-red-300 font-mono">{count} segments</span>
+                                          </div>
+                                        ))}
+                                      </div>
+                                    </div>
+                                  )}
+
+                                  {/* Aggregate Recommendations */}
+                                  {batchProbeData.aggregateAnalysis.recommendations.length > 0 && (
+                                    <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-lg p-3">
+                                      <h5 className="text-sm font-semibold text-yellow-300 mb-2">Stream-wide Recommendations</h5>
+                                      <ul className="space-y-1">
+                                        {batchProbeData.aggregateAnalysis.recommendations.map((rec, idx) => (
+                                          <li key={idx} className="text-xs text-yellow-200 flex items-start gap-1">
+                                            <span className="text-yellow-400">•</span>
+                                            <span>{rec}</span>
+                                          </li>
+                                        ))}
+                                      </ul>
+                                    </div>
+                                  )}
+
+                                  {/* Failed Segments */}
+                                  {batchProbeData.results.some(r => !r.success) && (
+                                    <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-3">
+                                      <h5 className="text-sm font-semibold text-red-300 mb-2">Failed Segments</h5>
+                                      <div className="space-y-1">
+                                        {batchProbeData.results
+                                          .filter(r => !r.success)
+                                          .map((result, idx) => (
+                                            <div key={idx} className="text-xs text-red-200">
+                                              <span className="font-mono">{result.url.split('/').pop()}</span>: {result.error}
+                                            </div>
+                                          ))}
+                                      </div>
+                                    </div>
+                                  )}
+                                </div>
+                              ) : null}
                             </div>
                           )}
                           
                           {/* Segment List */}
                           <div className="bg-black/30 rounded-lg p-4 max-h-64 overflow-y-auto">
                             <div className="space-y-1">
-                              {parsedManifest.segments.map((segment, idx) => (
-                                <div
-                                  key={segment.index}
-                                  className={`flex items-center gap-3 text-sm hover:bg-white/5 p-2 rounded cursor-pointer transition-colors ${
-                                    currentSegmentIndex === idx ? 'bg-purple-600/20 border-l-2 border-purple-500' : ''
-                                  }`}
-                                  onClick={() => {
-                                    setSelectedSegment(segment);
-                                    jumpToSegment(idx);
-                                  }}
-                                  title="Click to jump to this segment"
-                                >
-                                  <span className={`w-12 ${currentSegmentIndex === idx ? 'text-purple-300 font-bold' : 'text-gray-500'}`}>
-                                    #{segment.index}
-                                  </span>
-                                  <Clock className="h-3 w-3 text-gray-400" />
-                                  <span className="text-purple-300 font-mono">
-                                    {segment.duration.toFixed(3)}s
-                                  </span>
-                                  <span className="text-gray-300 truncate flex-1">
-                                    {segment.uri}
-                                  </span>
-                                  {currentSegmentIndex === idx && (
-                                    <span className="text-xs bg-purple-600/30 text-purple-300 px-2 py-1 rounded">
-                                      Playing
+                              {parsedManifest.segments.map((segment, idx) => {
+                                const isAnalyzed = !!probeCache[`${segment.index}-${segment.uri}`];
+                                return (
+                                  <div
+                                    key={segment.index}
+                                    className={`flex items-center gap-3 text-sm hover:bg-white/5 p-2 rounded cursor-pointer transition-colors ${
+                                      currentSegmentIndex === idx ? 'bg-purple-600/20 border-l-2 border-purple-500' : ''
+                                    }`}
+                                    onClick={() => {
+                                      setSelectedSegment(segment);
+                                      jumpToSegment(idx);
+                                    }}
+                                    title="Click to jump to this segment"
+                                  >
+                                    <span className={`w-12 ${currentSegmentIndex === idx ? 'text-purple-300 font-bold' : 'text-gray-500'}`}>
+                                      #{segment.index}
                                     </span>
-                                  )}
-                                </div>
-                              ))}
+                                    {isAnalyzed && (
+                                      <CheckCircle className="h-3 w-3 text-green-400" />
+                                    )}
+                                    <Clock className="h-3 w-3 text-gray-400" />
+                                    <span className="text-purple-300 font-mono">
+                                      {segment.duration.toFixed(3)}s
+                                    </span>
+                                    <span className="text-gray-300 truncate flex-1">
+                                      {segment.uri}
+                                    </span>
+                                    {currentSegmentIndex === idx && (
+                                      <span className="text-xs bg-purple-600/30 text-purple-300 px-2 py-1 rounded">
+                                        Playing
+                                      </span>
+                                    )}
+                                  </div>
+                                );
+                              })}
                             </div>
                           </div>
+
+                          {/* Analysis Progress Indicator */}
+                          {Object.keys(probeCache).length > 0 && (
+                            <div className="mt-2 text-xs text-gray-400">
+                              Analyzed {Object.keys(probeCache).length} of {parsedManifest.segments.length} segments
+                              {Object.keys(probeCache).length === parsedManifest.segments.length && (
+                                <span className="text-green-400 ml-2">✓ All segments analyzed</span>
+                              )}
+                            </div>
+                          )}
                         </div>
                       )}
-
-                      {/* Raw Manifest */}
-                      <div>
-                        <h3 className="text-white font-semibold mb-3">Raw Manifest</h3>
-                        <pre className="bg-black/30 text-gray-300 p-4 rounded-lg overflow-x-auto text-xs font-mono">
-                          {manifestContent}
-                        </pre>
-                      </div>
                     </div>
                   )
                 ) : selectedManifest && !selectedManifest.endsWith('.m3u8') ? (
