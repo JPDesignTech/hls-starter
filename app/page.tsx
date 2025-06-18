@@ -12,6 +12,7 @@ import { ChunkedUpload } from '@/components/chunked-upload';
 import { Upload, Video, Loader2, CheckCircle2, AlertCircle, Zap, CloudUpload, Package, Server, BarChart3, Link as LinkIcon, Trash2, X } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
+import HlsSpecTips from '@/components/hls-spec-tips';
 
 interface VideoInfo {
   id: string;
@@ -320,6 +321,9 @@ export default function HomePage() {
             Upload your video to generate HLS playlists and analyze them with deep segment inspection, 
             quality level analysis, and adaptive bitrate configurations ✨
           </p>
+          <div className="max-w-3xl mx-auto mt-6">
+            <HlsSpecTips />
+          </div>
         </div>
 
         {/* Upload Method Selection - Updated to grid-cols-4 on larger screens */}
