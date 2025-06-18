@@ -4,6 +4,22 @@ import { promisify } from 'util';
 
 const execAsync = promisify(exec);
 
+// 4. Compute Engine micro-instance:
+//    - Run a small VM with FFprobe as a microservice
+//
+// For now, this uses local FFprobe for development only
+
+// Only import ffmpeg-installer in development to avoid Vercel deployment issues
+let ffprobePath: string | undefined;
+try {
+  if (!process.env.FFPROBE_SERVICE_URL) {
+    const ffmpegInstaller = require('@ffmpeg-installer/ffmpeg');
+    ffprobePath = ffmpegInstaller.path.replace('ffmpeg', 'ffprobe');
+  }
+} catch (error) {
+  console.log('[Probe Segment] FFmpeg installer not available, will use external service');
+}
+
 export async function POST(
   request: NextRequest,
 ) {
@@ -70,9 +86,56 @@ export async function POST(
 }
 
 async function probeSegment(segmentUrl: string, detailed: boolean = false, byteRange?: { offset: number; length: number }, segmentDuration?: number) {
+  // Check if we're in production and have an external FFprobe service
+  const ffprobeServiceUrl = process.env.FFPROBE_SERVICE_URL;
+  
+  if (ffprobeServiceUrl) {
+    // Use external FFprobe service (e.g., Cloud Run)
+    try {
+      console.log('[Probe Segment] Using external FFprobe service:', ffprobeServiceUrl);
+      
+      const response = await fetch(`${ffprobeServiceUrl}/probe`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          url: segmentUrl,
+          detailed
+        }),
+        // Add timeout for reliability
+        signal: AbortSignal.timeout(30000) // 30 second timeout
+      });
+
+      if (!response.ok) {
+        throw new Error(`FFprobe service error: ${response.status} ${response.statusText}`);
+      }
+
+      const result = await response.json();
+      
+      if (!result.success) {
+        throw new Error(result.error || 'FFprobe service failed');
+      }
+
+      const probeData = result.data;
+      const analysis = analyzeHLSSegment(probeData, detailed, byteRange, segmentDuration);
+      
+      return { raw: probeData, analysis };
+      
+    } catch (error) {
+      console.error('[Probe Segment] External service error:', error);
+      throw error;
+    }
+  }
+  
+  // Local development fallback - use local ffprobe
+  console.log('[Probe Segment] Using local ffprobe (development mode)');
+  
+  if (!ffprobePath) {
+    throw new Error('FFprobe not available locally and no external service configured. Please set FFPROBE_SERVICE_URL environment variable.');
+  }
+  
   // Construct ffprobe command with options based on detail level
   const ffprobeCmd = [
-    'ffprobe',
+    `"${ffprobePath}"`,  // Use the full path to ffprobe from ffmpeg-installer
     '-v quiet',                    // Suppress logs
     '-print_format json',          // Output as JSON
     '-show_format',                // Show format info

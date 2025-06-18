@@ -1,0 +1,15 @@
+{
+  "name": "ffprobe-cloud-run",
+  "version": "1.0.0",
+  "description": "FFprobe service for HLS segment analysis on Google Cloud Run",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "express": "^4.18.2"
+  },
+  "engines": {
+    "node": ">=16.0.0"
+  }
+} 
