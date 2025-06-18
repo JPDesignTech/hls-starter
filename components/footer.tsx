@@ -14,13 +14,13 @@ export function Footer() {
               <h3 className="text-lg font-semibold text-white">About BeemMeUp</h3>
             </div>
             <p className="text-sm leading-relaxed">
-              BeemMeUp was created as a dogfooding effort for{' '}
+              BeemMeUp was created as a dogfooding effort for learning HLS and building tools at{' '}
               <Link 
-                href="https://www.descript.com/vibe" 
+                href="https://www.descript.com/" 
                 target="_blank" 
                 className="text-purple-400 hover:text-purple-300 underline"
               >
-                Vibe Coding at Descript
+                Descript
               </Link>
               . It demonstrates the power of AI-assisted development by building a production-ready 
               HLS analysis tool that generates playlists and provides deep inspection of video segments.
@@ -72,7 +72,7 @@ export function Footer() {
           </div>
         </div>
 
-        {/* Hosting Info */}
+                  {/* Hosting Info */}
         <div className="mt-4 text-center">
           <p className="text-xs text-gray-500">
             Hosted on{' '}
@@ -93,6 +93,36 @@ export function Footer() {
             </Link>
             {' '}infrastructure
           </p>
+        </div>
+
+        {/* HLS Resources */}
+        <div className="mt-6 pt-4 border-t border-white/10 text-center">
+          <p className="text-xs text-gray-400 mb-2">Built with reference to:</p>
+          <div className="flex flex-wrap justify-center gap-3 text-xs">
+            <Link
+              href="https://datatracker.ietf.org/doc/html/draft-pantos-hls-rfc8216bis"
+              target="_blank"
+              className="text-purple-400 hover:text-purple-300 underline"
+            >
+              HLS RFC 8216bis
+            </Link>
+            <span className="text-gray-600">•</span>
+            <Link
+              href="https://developer.apple.com/streaming/examples/"
+              target="_blank"
+              className="text-purple-400 hover:text-purple-300 underline"
+            >
+              Apple HLS Examples
+            </Link>
+            <span className="text-gray-600">•</span>
+            <Link
+              href="https://developer.apple.com/documentation/http-live-streaming/using-apple-s-http-live-streaming-hls-tools"
+              target="_blank"
+              className="text-purple-400 hover:text-purple-300 underline"
+            >
+              Apple HLS Tools
+            </Link>
+          </div>
         </div>
       </div>
     </footer>
