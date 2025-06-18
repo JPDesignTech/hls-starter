@@ -232,12 +232,12 @@ export default function HomePage() {
 
     const videoId = Date.now().toString();
     const urlParts = hlsUrl.split('/');
-    const title = urlParts[urlParts.length - 1] || 'HLS Stream';
+    const title = urlParts[urlParts.length - 1] || 'HLS Playlist';
     
     // Use the proxy endpoint to handle relative URLs in HLS playlists
     const proxiedUrl = `/api/hls-proxy?url=${encodeURIComponent(hlsUrl)}`;
 
-    // Add video to list with ready status since it's already an HLS stream
+    // Add video to list with ready status since it's already an HLS playlist
     const newVideo: VideoInfo = {
       id: videoId,
       title: title,
@@ -306,11 +306,8 @@ export default function HomePage() {
   ];
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-900 via-purple-900 to-violet-900 animate-gradient">
-      {/* Animated background gradient overlay */}
-      <div className="fixed inset-0 bg-gradient-to-t from-black/50 via-transparent to-transparent pointer-events-none" />
-      
-      <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
+    <div className="min-h-screen">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
         {/* Header */}
         <div className="text-center mb-12">
           <div className="inline-flex items-center justify-center space-x-2 mb-4">
@@ -320,8 +317,8 @@ export default function HomePage() {
             </h1>
           </div>
           <p className="text-lg text-gray-300 max-w-2xl mx-auto">
-            Upload your video and watch it transform into a lightning-fast HLS stream 
-            with adaptive bitrate magic ✨
+            Upload your video to generate HLS playlists and analyze them with deep segment inspection, 
+            quality level analysis, and adaptive bitrate configurations ✨
           </p>
         </div>
 
@@ -357,13 +354,13 @@ export default function HomePage() {
         <Card className="mb-8 bg-white/10 backdrop-blur-lg border-white/20">
           <CardHeader>
             <CardTitle className="text-white">
-              {selectedMethod === 'hls' ? 'Analyze HLS Stream' : 'Upload Video'}
+              {selectedMethod === 'hls' ? 'Analyze HLS Playlist' : 'Upload Video'}
             </CardTitle>
             <CardDescription className="text-gray-300">
               {selectedMethod === 'direct' && 'Upload directly to cloud storage for best performance'}
               {selectedMethod === 'chunked' && 'Upload large files by splitting them into chunks'}
               {selectedMethod === 'traditional' && 'Traditional upload method (limited to 4.5MB on Vercel)'}
-              {selectedMethod === 'hls' && 'Enter an HLS playlist URL to analyze an existing stream'}
+              {selectedMethod === 'hls' && 'Enter an HLS playlist URL to analyze segments, quality levels, and configurations'}
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -451,7 +448,7 @@ export default function HomePage() {
 
                 {/* Example URLs */}
                 <div className="space-y-2">
-                  <p className="text-xs text-gray-400">Try these example streams:</p>
+                  <p className="text-xs text-gray-400">Try these example HLS playlists:</p>
                   <div className="flex flex-wrap gap-2">
                     <button
                       type="button"
@@ -472,14 +469,14 @@ export default function HomePage() {
                       onClick={() => setHlsUrl('https://devstreaming-cdn.apple.com/videos/streaming/examples/bipbop_4x3/bipbop_4x3_variant.m3u8')}
                       className="text-xs px-2 py-1 bg-white/10 hover:bg-white/20 rounded text-purple-300 transition-colors"
                     >
-                      Basic 4:3 Stream
+                      Basic 4:3 Playlist
                     </button>
                     <button
                       type="button"
                       onClick={() => setHlsUrl('https://devstreaming-cdn.apple.com/videos/streaming/examples/bipbop_16x9/bipbop_16x9_variant.m3u8')}
                       className="text-xs px-2 py-1 bg-white/10 hover:bg-white/20 rounded text-purple-300 transition-colors"
                     >
-                      Basic 16:9 Stream
+                      Basic 16:9 Playlist
                     </button>
                   </div>
                 </div>
@@ -490,7 +487,7 @@ export default function HomePage() {
                   className="w-full bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white"
                 >
                   <LinkIcon className="mr-2 h-4 w-4" />
-                  Analyze HLS Stream
+                  Analyze HLS Playlist
                 </Button>
               </div>
             )}
@@ -694,7 +691,7 @@ export default function HomePage() {
                       <Link href={`/video/${video.id}/analyze`} className="flex-1">
                         <Button className="w-full bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700">
                           <BarChart3 className="mr-2 h-4 w-4" />
-                          Analyze HLS Stream
+                          Analyze HLS Output
                         </Button>
                       </Link>
                     </div>
@@ -716,7 +713,7 @@ export default function HomePage() {
                 </h3>
                 <p className="text-sm text-gray-300 max-w-md mx-auto">
                   Choose an upload method above and upload a video file to get started. 
-                  BeemMeUp will automatically transcode it into multiple quality levels for adaptive streaming.
+                  BeemMeUp will generate HLS playlists with multiple quality levels and provide detailed analysis tools.
                 </p>
               </div>
             </CardContent>

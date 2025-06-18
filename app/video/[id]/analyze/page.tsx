@@ -820,7 +820,7 @@ export default function VideoAnalyzePage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-gray-900 via-purple-900 to-violet-900 flex items-center justify-center">
+      <div className="min-h-screen flex items-center justify-center">
         <div className="text-white">Loading video data...</div>
       </div>
     );
@@ -828,7 +828,7 @@ export default function VideoAnalyzePage() {
 
   if (error || !videoData) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-gray-900 via-purple-900 to-violet-900 flex items-center justify-center">
+      <div className="min-h-screen flex items-center justify-center">
         <Card className="bg-red-500/20 border-red-500/30">
           <CardContent className="pt-6">
             <p className="text-red-300">{error || 'Video not found'}</p>
@@ -839,7 +839,7 @@ export default function VideoAnalyzePage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-900 via-purple-900 to-violet-900">
+    <div className="min-h-screen">
       <div className="max-w-7xl mx-auto px-4 py-8">
         {/* Header */}
         <div className="mb-8 flex items-center justify-between">
@@ -853,7 +853,7 @@ export default function VideoAnalyzePage() {
             <div>
               <h1 className="text-3xl font-bold text-white flex items-center gap-2">
                 <Zap className="h-8 w-8 text-yellow-400" />
-                HLS Stream Analyzer
+                HLS Playlist Analyzer
               </h1>
               <p className="text-gray-300">Video ID: {videoId}</p>
             </div>
@@ -861,7 +861,7 @@ export default function VideoAnalyzePage() {
           <Link href={videoData.url || '#'} target="_blank">
             <Button className="bg-purple-600 hover:bg-purple-700">
               <Play className="mr-2 h-4 w-4" />
-              Play Stream
+              Play Video
             </Button>
           </Link>
         </div>
@@ -871,7 +871,7 @@ export default function VideoAnalyzePage() {
           <CardHeader>
             <CardTitle className="text-white flex items-center gap-2">
               <Play className="h-5 w-5" />
-              HLS Stream Player
+              HLS Playlist Player
             </CardTitle>
             <CardDescription className="text-gray-300">
               {selectedManifest ? `Playing: ${selectedManifest.split('/').pop()}` : 'Select a quality playlist to play'}
@@ -984,7 +984,7 @@ export default function VideoAnalyzePage() {
               <CardHeader>
                 <CardTitle className="text-white flex items-center gap-2">
                   <List className="h-5 w-5" />
-                  Stream Files
+                  HLS Files
                 </CardTitle>
                 <CardDescription className="text-gray-300">
                   {videoData.files?.length || (videoData.isOriginal ? 1 : 0)} files generated
@@ -1077,7 +1077,7 @@ export default function VideoAnalyzePage() {
               <CardHeader>
                 <CardTitle className="text-white flex items-center gap-2">
                   <FileVideo className="h-5 w-5" />
-                  Stream Info
+                  Video Info
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-3">
