@@ -653,4 +653,4 @@ MIT
 
 ## 🙏 Acknowledgments
 
-Built with amazing open-source projects and Google Cloud Platform services.
+Built with amazing open-source projects, having fun @[Descript](https://www.descript.com), and Google Cloud Platform services
