@@ -149,8 +149,8 @@ if (typeof window !== 'undefined') {
 }
 
 export default function VideoAnalyzePage() {
-  const params = useParams();
-  const videoId = params.id as string;
+  const params = useParams<{ id: string }>();
+  const videoId = params.id;
   const [videoData, setVideoData] = useState<VideoMetadata | null>(null);
   const [selectedManifest, setSelectedManifest] = useState<string>('');
   const [manifestContent, setManifestContent] = useState<string>('');
@@ -173,6 +173,49 @@ export default function VideoAnalyzePage() {
   const [autoplayEnabled, setAutoplayEnabled] = useState(false);
   const videoRef = useRef<HTMLVideoElement>(null);
   const hlsRef = useRef<any>(null);
+
+  // Helper function to resolve URLs when using the HLS proxy
+  const resolveUrl = (relativeUrl: string, baseUrl: string): string => {
+    // If the URL is already absolute, return it as-is
+    if (relativeUrl.startsWith('http://') || relativeUrl.startsWith('https://')) {
+      return relativeUrl;
+    }
+
+    // If the base URL is a proxy URL, extract the original URL and resolve against it
+    if (baseUrl.startsWith('/api/hls-proxy')) {
+      try {
+        const params = new URLSearchParams(baseUrl.split('?')[1]);
+        const originalUrl = params.get('url');
+        
+        if (originalUrl) {
+          const baseUrlObj = new URL(originalUrl);
+          const basePath = originalUrl.substring(0, originalUrl.lastIndexOf('/') + 1);
+          
+          let resolvedUrl: string;
+          if (relativeUrl.startsWith('/')) {
+            // Absolute path from root
+            resolvedUrl = `${baseUrlObj.protocol}//${baseUrlObj.host}${relativeUrl}`;
+          } else {
+            // Relative path
+            resolvedUrl = basePath + relativeUrl;
+          }
+          
+          // Return the resolved URL through the proxy
+          return `/api/hls-proxy?url=${encodeURIComponent(resolvedUrl)}`;
+        }
+      } catch (e) {
+        console.error('Error extracting URL from proxy:', e);
+      }
+    }
+    
+    // For regular URLs, use the URL constructor
+    try {
+      return new URL(relativeUrl, baseUrl).href;
+    } catch (e) {
+      console.error('Error constructing URL:', e);
+      return relativeUrl;
+    }
+  };
 
   // Fetch video metadata
   useEffect(() => {
@@ -529,33 +572,35 @@ export default function VideoAnalyzePage() {
 
   // Probe segment with ffprobe
   const probeSegment = async (segment: Segment, forceRefresh: boolean = false) => {
-    // Check cache first (unless force refresh is requested)
     const cacheKey = `${segment.index}-${segment.uri}`;
+    
+    // Check cache first unless force refresh
     if (!forceRefresh && probeCache[cacheKey]) {
-      console.log('[Probe] Using cached result for segment', segment.index);
+      console.log('Using cached probe data for segment', segment.index);
       setProbeData(probeCache[cacheKey]);
       setShowProbeResults(true);
       return;
     }
-
-    setProbingSegment(true);
-    setProbeData(null);
-    setShowProbeResults(true);
     
+    setProbingSegment(true);
+    setShowProbeResults(true);
+    setProbeData(null);
+
     try {
-      // Construct full segment URL
-      const segmentUrl = new URL(segment.uri, selectedManifest).href;
-      
+      const segmentUrl = segment.uri.startsWith('http') 
+        ? segment.uri 
+        : resolveUrl(segment.uri, selectedManifest);
+
       const response = await fetch(`/api/video/${videoId}/probe-segment`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ 
+        body: JSON.stringify({
           segmentUrl,
           detailed: detailedAnalysis,
-          byteRange: segment.byteRange, // Pass byte range if available
-          segmentDuration: segment.duration // Pass segment duration from manifest
+          byteRange: segment.byteRange,
+          segmentDuration: segment.duration
         }),
       });
 
@@ -563,7 +608,7 @@ export default function VideoAnalyzePage() {
         throw new Error('Failed to probe segment');
       }
 
-      const data = await response.json();
+      const data: ProbeData = await response.json();
       setProbeData(data);
       
       // Cache the result
@@ -573,7 +618,7 @@ export default function VideoAnalyzePage() {
       }));
     } catch (error) {
       console.error('Error probing segment:', error);
-      setError('Failed to probe segment');
+      setProbeData(null);
     } finally {
       setProbingSegment(false);
     }
@@ -581,66 +626,64 @@ export default function VideoAnalyzePage() {
 
   // Probe all segments in batch
   const probeBatchSegments = async () => {
-    if (!parsedManifest?.segments || parsedManifest.segments.length === 0) return;
+    if (!parsedManifest) return; // Add null check
     
     setProbingBatch(true);
     setBatchProbeData(null);
-    setShowBatchResults(true);
-    
+
     try {
-      // Construct segment data with URLs, byte ranges, and durations
-      const segmentData = parsedManifest.segments.map(segment => {
-        const url = new URL(segment.uri, selectedManifest).href;
+      // Prepare segment URLs with metadata
+      const segmentUrls = parsedManifest.segments.map(segment => {
+        const url = segment.uri.startsWith('http')
+          ? segment.uri
+          : resolveUrl(segment.uri, selectedManifest);
+        
         return {
           url,
           byteRange: segment.byteRange,
           duration: segment.duration
         };
       });
-      
-      console.log('[Batch Probe] Analyzing', segmentData.length, 'segments');
+
+      console.log('[Batch Probe] Analyzing', segmentUrls.length, 'segments');
       
       const response = await fetch(`/api/video/${videoId}/probe-segment`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ 
-          segmentUrls: segmentData,
-          batchMode: true 
+        body: JSON.stringify({
+          segmentUrls,
+          batchMode: true,
+          detailed: false // Always use basic mode for batch to avoid timeouts
         }),
       });
 
       if (!response.ok) {
-        const errorText = await response.text();
-        console.error('[Batch Probe] Error response:', errorText);
         throw new Error('Failed to probe segments');
       }
 
-      const data = await response.json();
-      console.log('[Batch Probe] Received data:', data);
+      const data: BatchProbeData = await response.json();
       setBatchProbeData(data);
       
-      // Cache individual segment results if available
-      if (data.results) {
-        data.results.forEach((result: any, index: number) => {
-          if (result.success && result.analysis) {
-            const segment = parsedManifest.segments[index];
-            const cacheKey = `${segment.index}-${segment.uri}`;
-            setProbeCache(prev => ({
-              ...prev,
-              [cacheKey]: {
-                raw: result.raw,
-                analysis: result.analysis,
-                segmentUrl: result.url
-              }
-            }));
-          }
-        });
-      }
+      // Cache individual results
+      data.results.forEach((result, index) => {
+        if (result.success && parsedManifest.segments[index]) {
+          const segment = parsedManifest.segments[index];
+          const cacheKey = `${segment.index}-${segment.uri}`;
+          setProbeCache(prev => ({
+            ...prev,
+            [cacheKey]: {
+              raw: result.raw,
+              analysis: result.analysis,
+              segmentUrl: result.url
+            }
+          }));
+        }
+      });
     } catch (error) {
-      console.error('[Batch Probe] Error:', error);
-      setError(error instanceof Error ? error.message : 'Failed to probe segments');
+      console.error('Error probing batch segments:', error);
+      setBatchProbeData(null);
     } finally {
       setProbingBatch(false);
     }
@@ -1107,7 +1150,7 @@ export default function VideoAnalyzePage() {
                                   variant="ghost"
                                   className="text-purple-300 hover:text-purple-200"
                                   onClick={() => {
-                                    const fullUrl = new URL(level.uri, selectedManifest).href;
+                                    const fullUrl = resolveUrl(level.uri, selectedManifest);
                                     setSelectedManifest(fullUrl);
                                   }}
                                 >

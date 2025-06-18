@@ -9,7 +9,7 @@ import { Progress } from '@/components/ui/progress';
 import { VideoPlayer } from '@/components/video-player';
 import { DirectUpload } from '@/components/direct-upload';
 import { ChunkedUpload } from '@/components/chunked-upload';
-import { Upload, Video, Loader2, CheckCircle2, AlertCircle, Zap, CloudUpload, Package, Server, BarChart3 } from 'lucide-react';
+import { Upload, Video, Loader2, CheckCircle2, AlertCircle, Zap, CloudUpload, Package, Server, BarChart3, Link as LinkIcon } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 
@@ -22,7 +22,7 @@ interface VideoInfo {
   error?: string;
 }
 
-type UploadMethod = 'direct' | 'chunked' | 'traditional';
+type UploadMethod = 'direct' | 'chunked' | 'traditional' | 'hls';
 
 export default function HomePage() {
   const router = useRouter();
@@ -31,6 +31,7 @@ export default function HomePage() {
   const [isUploading, setIsUploading] = React.useState(false);
   const [selectedMethod, setSelectedMethod] = React.useState<UploadMethod>('direct');
   const [autoAnalyze, setAutoAnalyze] = React.useState(false);
+  const [hlsUrl, setHlsUrl] = React.useState('');
   const fileInputRef = React.useRef<HTMLInputElement>(null);
 
   // Poll for video status updates
@@ -57,8 +58,12 @@ export default function HomePage() {
       }
     };
 
-    const interval = setInterval(checkVideoStatus, 5000); // Check every 5 seconds
-    return () => clearInterval(interval);
+    // Only run if there are videos being processed
+    if (videos.some(v => v.status === 'processing')) {
+      checkVideoStatus();
+      const interval = setInterval(checkVideoStatus, 5000); // Check every 5 seconds
+      return () => clearInterval(interval);
+    }
   }, [videos]);
 
   // Add video to the list (called from child components)
@@ -162,6 +167,56 @@ export default function HomePage() {
     }
   };
 
+  const handleHlsSubmit = async () => {
+    if (!hlsUrl.trim()) return;
+
+    const videoId = Date.now().toString();
+    const urlParts = hlsUrl.split('/');
+    const title = urlParts[urlParts.length - 1] || 'HLS Stream';
+    
+    // Use the proxy endpoint to handle relative URLs in HLS playlists
+    const proxiedUrl = `/api/hls-proxy?url=${encodeURIComponent(hlsUrl)}`;
+
+    // Add video to list with ready status since it's already an HLS stream
+    const newVideo: VideoInfo = {
+      id: videoId,
+      title: title,
+      status: 'ready',
+      progress: 100,
+      url: proxiedUrl,
+    };
+    
+    setVideos(prev => [newVideo, ...prev]);
+    
+    // Store in Redis so the status API can find it
+    try {
+      const response = await fetch('/api/video/store-hls', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          videoId,
+          url: proxiedUrl,
+          originalUrl: hlsUrl,
+          title,
+        }),
+      });
+      
+      if (!response.ok) {
+        console.error('Failed to store HLS URL in Redis');
+      }
+    } catch (error) {
+      console.error('Error storing HLS URL:', error);
+    }
+    
+    // Clear the input
+    setHlsUrl('');
+    
+    // Navigate to analyzer if auto-analyze is enabled
+    if (autoAnalyze) {
+      router.push(`/video/${videoId}/analyze`);
+    }
+  };
+
   const methods = [
     {
       id: 'direct' as UploadMethod,
@@ -170,17 +225,24 @@ export default function HomePage() {
       icon: CloudUpload,
     },
     {
-      id: 'chunked' as UploadMethod,
-      title: 'Chunked Upload',
-      description: 'Split large files into smaller chunks',
-      icon: Package,
+      id: 'hls' as UploadMethod,
+      title: 'Upload HLS',
+      description: 'Analyze existing HLS playlist URL',
+      icon: LinkIcon,
     },
-    {
-      id: 'traditional' as UploadMethod,
-      title: 'Traditional',
-      description: 'Standard upload (max 4.5MB)',
-      icon: Server,
-    },
+    // TODO: Add chunked and traditional upload methods back in
+    // {
+    //   id: 'chunked' as UploadMethod,
+    //   title: 'Chunked Upload',
+    //   description: 'Split large files into smaller chunks',
+    //   icon: Package,
+    // },
+    // {
+    //   id: 'traditional' as UploadMethod,
+    //   title: 'Traditional',
+    //   description: 'Standard upload (max 4.5MB)',
+    //   icon: Server,
+    // },
   ];
 
   return (
@@ -203,8 +265,8 @@ export default function HomePage() {
           </p>
         </div>
 
-        {/* Upload Method Selection */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
+        {/* Upload Method Selection - Updated to grid-cols-4 on larger screens */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-2 gap-4 mb-8">
           {methods.map((method) => {
             const Icon = method.icon;
             return (
@@ -234,11 +296,14 @@ export default function HomePage() {
         {/* Upload Section */}
         <Card className="mb-8 bg-white/10 backdrop-blur-lg border-white/20">
           <CardHeader>
-            <CardTitle className="text-white">Upload Video</CardTitle>
+            <CardTitle className="text-white">
+              {selectedMethod === 'hls' ? 'Analyze HLS Stream' : 'Upload Video'}
+            </CardTitle>
             <CardDescription className="text-gray-300">
               {selectedMethod === 'direct' && 'Upload directly to cloud storage for best performance'}
               {selectedMethod === 'chunked' && 'Upload large files by splitting them into chunks'}
               {selectedMethod === 'traditional' && 'Traditional upload method (limited to 4.5MB on Vercel)'}
+              {selectedMethod === 'hls' && 'Enter an HLS playlist URL to analyze an existing stream'}
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -305,6 +370,69 @@ export default function HomePage() {
                 onVideoAdded={addVideo}
                 onVideoUpdated={updateVideo}
               />
+            )}
+            
+            {selectedMethod === 'hls' && (
+              <div className="space-y-4">
+                <div>
+                  <Label htmlFor="hls-url" className="text-white">HLS Playlist URL</Label>
+                  <Input
+                    id="hls-url"
+                    type="url"
+                    placeholder="https://devstreaming-cdn.apple.com/videos/streaming/examples/bipbop_4x3/bipbop_4x3_variant.m3u8"
+                    value={hlsUrl}
+                    onChange={(e) => setHlsUrl(e.target.value)}
+                    className="bg-white/10 border-white/20 text-white placeholder:text-gray-400 hover:bg-white/20 transition-colors"
+                  />
+                  <p className="text-xs text-gray-400 mt-2">
+                    Enter a valid HLS playlist URL (.m3u8 file). Works with both relative and absolute segment URLs.
+                  </p>
+                </div>
+
+                {/* Example URLs */}
+                <div className="space-y-2">
+                  <p className="text-xs text-gray-400">Try these example streams:</p>
+                  <div className="flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setHlsUrl('https://devstreaming-cdn.apple.com/videos/streaming/examples/adv_dv_atmos/main.m3u8')}
+                      className="text-xs px-2 py-1 bg-white/10 hover:bg-white/20 rounded text-purple-300 transition-colors"
+                    >
+                      Advanced (fMP4)
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setHlsUrl('https://devstreaming-cdn.apple.com/videos/streaming/examples/img_bipbop_adv_example_ts/master.m3u8')}
+                      className="text-xs px-2 py-1 bg-white/10 hover:bg-white/20 rounded text-purple-300 transition-colors"
+                    >
+                      Advanced (TS)
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setHlsUrl('https://devstreaming-cdn.apple.com/videos/streaming/examples/bipbop_4x3/bipbop_4x3_variant.m3u8')}
+                      className="text-xs px-2 py-1 bg-white/10 hover:bg-white/20 rounded text-purple-300 transition-colors"
+                    >
+                      Basic 4:3 Stream
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setHlsUrl('https://devstreaming-cdn.apple.com/videos/streaming/examples/bipbop_16x9/bipbop_16x9_variant.m3u8')}
+                      className="text-xs px-2 py-1 bg-white/10 hover:bg-white/20 rounded text-purple-300 transition-colors"
+                    >
+                      Basic 16:9 Stream
+                    </button>
+                  </div>
+                </div>
+
+                <Button
+                  onClick={handleHlsSubmit}
+                  disabled={!hlsUrl.trim()}
+                  className="w-full bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white"
+                >
+                  <LinkIcon className="mr-2 h-4 w-4" />
+                  Analyze HLS Stream
+                </Button>
+              </div>
             )}
             
             {selectedMethod === 'chunked' && (

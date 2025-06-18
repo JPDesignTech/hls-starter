@@ -35,89 +35,115 @@ export function VideoPlayer({
   const [availableQualities, setAvailableQualities] = React.useState<string[]>([]);
   const [showControls, setShowControls] = React.useState(true);
   const controlsTimeoutRef = React.useRef<NodeJS.Timeout | null>(null);
+  const [qualityLevels, setQualityLevels] = React.useState<{ quality: string; index: number }[]>([]);
 
   React.useEffect(() => {
     if (!videoRef.current || !src) return;
 
     const video = videoRef.current;
 
-    // Check if this is an HLS stream
-    const isHLS = src.endsWith('.m3u8');
-    
-    if (!isHLS) {
-      // For regular video files, just set the source directly
-      video.src = src;
-      video.addEventListener('loadedmetadata', () => {
-        if (autoPlay) video.play();
-      });
-      return;
-    }
-
-    // Native HLS support (Safari)
-    if (video.canPlayType('application/vnd.apple.mpegurl')) {
-      video.src = src;
-      video.addEventListener('loadedmetadata', () => {
-        if (autoPlay) video.play();
-      });
-    } 
-    // HLS.js for other browsers
-    else if (Hls.isSupported()) {
-      const hls = new Hls({
-        debug: false,
-        enableWorker: true,
-        lowLatencyMode: true,
-        backBufferLength: 90,
-      });
-
-      hlsRef.current = hls;
-      hls.loadSource(src);
-      hls.attachMedia(video);
-
-      hls.on(Hls.Events.MANIFEST_PARSED, () => {
-        if (autoPlay) video.play();
-        
-        // Get available quality levels
-        const levels = hls.levels.map(level => {
-          const height = level.height;
-          if (height >= 1080) return '1080p';
-          if (height >= 720) return '720p';
-          if (height >= 480) return '480p';
-          return '360p';
+    // Load video source
+    if (src) {
+      // Check if it's an HLS stream - support both .m3u8 files and proxy URLs
+      const isHLSStream = src.endsWith('.m3u8') || src.includes('/api/hls-proxy');
+      
+      if (!isHLSStream) {
+        // For regular video files, just set the source directly
+        video.src = src;
+        video.addEventListener('loadedmetadata', () => {
+          if (autoPlay) video.play();
         });
-        setAvailableQualities(['Auto', ...levels]);
-      });
-
-      hls.on(Hls.Events.LEVEL_SWITCHED, (_, data) => {
-        const level = hls.levels[data.level];
-        const height = level.height;
-        let quality = 'Auto';
-        if (height >= 1080) quality = '1080p';
-        else if (height >= 720) quality = '720p';
-        else if (height >= 480) quality = '480p';
-        else quality = '360p';
+        return;
+      }
+      
+      // Handle HLS streams
+      if (video.canPlayType('application/vnd.apple.mpegurl')) {
+        // Native HLS support (Safari)
+        video.src = src;
+        video.addEventListener('loadedmetadata', () => {
+          if (autoPlay) video.play();
+        });
+      } else if (Hls && Hls.isSupported()) {
+        // HLS.js for other browsers
+        const hls = new Hls({
+          debug: false,
+          enableWorker: true,
+          lowLatencyMode: false,
+        });
+        hlsRef.current = hls;
         
-        setCurrentQuality(quality);
-        onQualityChange?.(quality);
-      });
-
-      hls.on(Hls.Events.ERROR, (_, data) => {
-        if (data.fatal) {
-          console.error('HLS fatal error:', data);
-          switch (data.type) {
-            case Hls.ErrorTypes.NETWORK_ERROR:
-              hls.startLoad();
-              break;
-            case Hls.ErrorTypes.MEDIA_ERROR:
-              hls.recoverMediaError();
-              break;
-            default:
-              hls.destroy();
-              break;
+        hls.loadSource(src);
+        hls.attachMedia(video);
+        
+        hls.on(Hls.Events.MANIFEST_PARSED, () => {
+          if (autoPlay) video.play();
+          
+          // Get available quality levels
+          const uniqueQualities = new Set<string>();
+          const levels = hls.levels.map((level, index) => {
+            const height = level.height;
+            let quality: string;
+            if (height >= 1080) quality = '1080p';
+            else if (height >= 720) quality = '720p';
+            else if (height >= 480) quality = '480p';
+            else quality = '360p';
+            
+            // If we already have this quality, add the bitrate to make it unique
+            if (uniqueQualities.has(quality)) {
+              quality = `${quality} (${Math.round(level.bitrate / 1000)}kbps)`;
+            }
+            uniqueQualities.add(quality);
+            
+            return {
+              quality,
+              index,
+            };
+          });
+          
+          setQualityLevels(levels);
+          setAvailableQualities(['Auto', ...levels.map(l => l.quality)]);
+          
+          // Set initial quality (auto by default)
+          if (hls.currentLevel === -1) {
+            setCurrentQuality('Auto');
+          } else {
+            const currentLevel = levels.find(l => l.index === hls.currentLevel);
+            setCurrentQuality(currentLevel?.quality || 'Auto');
           }
-        }
-      });
-    } else {
-      console.error('This browser does not support HLS playback');
+        });
+
+        hls.on(Hls.Events.LEVEL_SWITCHED, (_, data) => {
+          const level = hls.levels[data.level];
+          const height = level.height;
+          let quality = 'Auto';
+          if (height >= 1080) quality = '1080p';
+          else if (height >= 720) quality = '720p';
+          else if (height >= 480) quality = '480p';
+          else quality = '360p';
+          
+          setCurrentQuality(quality);
+          onQualityChange?.(quality);
+        });
+
+        hls.on(Hls.Events.ERROR, (_, data) => {
+          if (data.fatal) {
+            console.error('HLS fatal error:', data);
+            switch (data.type) {
+              case Hls.ErrorTypes.NETWORK_ERROR:
+                hls.startLoad();
+                break;
+              case Hls.ErrorTypes.MEDIA_ERROR:
+                hls.recoverMediaError();
+                break;
+              default:
+                hls.destroy();
+                break;
+            }
+          }
+        });
+      } else {
+        console.error('This browser does not support HLS playback');
+      }
     }
 
     return () => {
@@ -236,17 +262,14 @@ export function VideoPlayer({
     if (quality === 'Auto') {
       hlsRef.current.currentLevel = -1;
     } else {
-      const levelIndex = hlsRef.current.levels.findIndex(level => {
-        const height = level.height;
-        if (quality === '1080p') return height >= 1080;
-        if (quality === '720p') return height >= 720 && height < 1080;
-        if (quality === '480p') return height >= 480 && height < 720;
-        return height < 480;
-      });
-      if (levelIndex !== -1) {
-        hlsRef.current.currentLevel = levelIndex;
+      // Find the level that matches this quality
+      const level = qualityLevels.find(l => l.quality === quality);
+      if (level !== undefined) {
+        hlsRef.current.currentLevel = level.index;
       }
     }
+    
+    setCurrentQuality(quality);
   };
 
   return (
@@ -347,8 +370,8 @@ export function VideoPlayer({
               onChange={(e) => changeQuality(e.target.value)}
               className="bg-white/20 text-white text-sm px-2 py-1 rounded hover:bg-white/30 cursor-pointer"
             >
-              {availableQualities.map(q => (
-                <option key={q} value={q}>{q}</option>
+              {availableQualities.map((q, index) => (
+                <option key={`${q}-${index}`} value={q}>{q}</option>
               ))}
             </select>
 

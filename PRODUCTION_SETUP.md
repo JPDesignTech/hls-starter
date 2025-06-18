@@ -30,6 +30,9 @@ Set these environment variables in your Vercel dashboard:
 VERCEL=1                    # Auto-set by Vercel
 NODE_ENV=production         # Auto-set by Vercel
 
+# Required: FFprobe Service URL (Cloud Run)
+FFPROBE_SERVICE_URL=https://your-ffprobe-service.run.app
+
 # Google Cloud Storage (Recommended)
 GCS_BUCKET_NAME=your-bucket-name
 GCS_PROJECT_ID=your-project-id
@@ -42,6 +45,7 @@ REDIS_TOKEN=your-redis-token
 
 # Optional
 NEXT_PUBLIC_APP_URL=https://your-domain.vercel.app
+NEXT_PUBLIC_FFPROBE_SERVICE_URL=https://your-ffprobe-service.run.app
 ```
 
 ## Production Deployment Steps

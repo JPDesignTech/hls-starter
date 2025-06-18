@@ -1,24 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { exec } from 'child_process';
-import { promisify } from 'util';
 
-const execAsync = promisify(exec);
-
-// 4. Compute Engine micro-instance:
-//    - Run a small VM with FFprobe as a microservice
-//
-// For now, this uses local FFprobe for development only
-
-// Only import ffmpeg-installer in development to avoid Vercel deployment issues
-let ffprobePath: string | undefined;
-try {
-  if (!process.env.FFPROBE_SERVICE_URL) {
-    const ffmpegInstaller = require('@ffmpeg-installer/ffmpeg');
-    ffprobePath = ffmpegInstaller.path.replace('ffmpeg', 'ffprobe');
-  }
-} catch (error) {
-  console.log('[Probe Segment] FFmpeg installer not available, will use external service');
-}
+// Use external FFprobe service (Cloud Run) for all environments
+// No local ffprobe fallback needed
 
 export async function POST(
   request: NextRequest,
@@ -86,108 +69,43 @@ export async function POST(
 }
 
 async function probeSegment(segmentUrl: string, detailed: boolean = false, byteRange?: { offset: number; length: number }, segmentDuration?: number) {
-  // Check if we're in production and have an external FFprobe service
-  const ffprobeServiceUrl = process.env.FFPROBE_SERVICE_URL;
+  const ffprobeServiceUrl = process.env.FFPROBE_SERVICE_URL || process.env.NEXT_PUBLIC_FFPROBE_SERVICE_URL;
   
-  if (ffprobeServiceUrl) {
-    // Use external FFprobe service (e.g., Cloud Run)
-    try {
-      console.log('[Probe Segment] Using external FFprobe service:', ffprobeServiceUrl);
-      
-      const response = await fetch(`${ffprobeServiceUrl}/probe`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          url: segmentUrl,
-          detailed
-        }),
-        // Add timeout for reliability
-        signal: AbortSignal.timeout(30000) // 30 second timeout
-      });
-
-      if (!response.ok) {
-        throw new Error(`FFprobe service error: ${response.status} ${response.statusText}`);
-      }
-
-      const result = await response.json();
-      
-      if (!result.success) {
-        throw new Error(result.error || 'FFprobe service failed');
-      }
-
-      const probeData = result.data;
-      const analysis = analyzeHLSSegment(probeData, detailed, byteRange, segmentDuration);
-      
-      return { raw: probeData, analysis };
-      
-    } catch (error) {
-      console.error('[Probe Segment] External service error:', error);
-      throw error;
-    }
+  if (!ffprobeServiceUrl) {
+    throw new Error('FFprobe service URL not configured. Please set FFPROBE_SERVICE_URL environment variable.');
   }
-  
-  // Local development fallback - use local ffprobe
-  console.log('[Probe Segment] Using local ffprobe (development mode)');
-  
-  if (!ffprobePath) {
-    throw new Error('FFprobe not available locally and no external service configured. Please set FFPROBE_SERVICE_URL environment variable.');
-  }
-  
-  // Construct ffprobe command with options based on detail level
-  const ffprobeCmd = [
-    `"${ffprobePath}"`,  // Use the full path to ffprobe from ffmpeg-installer
-    '-v quiet',                    // Suppress logs
-    '-print_format json',          // Output as JSON
-    '-show_format',                // Show format info
-    '-show_streams',               // Show all streams
-  ];
-
-  // Note: FFprobe doesn't support direct byte range reading
-  // For byte-range segments, we'll analyze the full file and override duration later
-  if (byteRange) {
-    console.log('[Probe Segment] Note: Byte range segment detected, will adjust duration', byteRange);
-  }
-
-  // Add more detailed options only if requested
-  if (detailed && !byteRange) { // Don't do detailed analysis for byte ranges
-    ffprobeCmd.push(
-      '-count_frames',             // Count frames (can be slow)
-      '-count_packets',            // Count packets
-      '-show_frames',              // Show frame details (generates lots of data)
-      '-read_intervals %+2'        // Only read first 2 seconds for detailed analysis
-    );
-  } else {
-    // For basic analysis, just get packet summary without individual packet data
-    ffprobeCmd.push(
-      '-show_programs',            // Show program info (for MPEG-TS)
-      '-show_chapters'             // Show chapters if any
-    );
-  }
-
-  ffprobeCmd.push(`"${segmentUrl}"`);
-  const command = ffprobeCmd.join(' ');
 
   try {
-    // Increase maxBuffer to handle larger outputs (10MB for detailed, 2MB for basic)
-    const maxBuffer = detailed ? 10 * 1024 * 1024 : 2 * 1024 * 1024;
-    const { stdout, stderr } = await execAsync(command, { maxBuffer });
+    console.log('[Probe Segment] Using FFprobe service:', ffprobeServiceUrl);
+    
+    const response = await fetch(`${ffprobeServiceUrl}/probe`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        url: segmentUrl,
+        detailed
+      }),
+      // Add timeout for reliability
+      signal: AbortSignal.timeout(30000) // 30 second timeout
+    });
 
-    if (stderr) {
-      console.error('[Probe Segment] ffprobe stderr:', stderr);
+    if (!response.ok) {
+      throw new Error(`FFprobe service error: ${response.status} ${response.statusText}`);
     }
 
-    const probeData = JSON.parse(stdout);
+    const result = await response.json();
+    
+    if (!result.success) {
+      throw new Error(result.error || 'FFprobe service failed');
+    }
+
+    const probeData = result.data;
     const analysis = analyzeHLSSegment(probeData, detailed, byteRange, segmentDuration);
-
+    
     return { raw: probeData, analysis };
-  } catch (error: any) {
-    if (error.code === 'ERR_CHILD_PROCESS_STDIO_MAXBUFFER') {
-      console.error('[Probe Segment] Buffer overflow, retrying with basic analysis only');
-      // If detailed analysis caused overflow, retry with basic analysis
-      if (detailed) {
-        return probeSegment(segmentUrl, false, byteRange, segmentDuration);
-      }
-    }
+    
+  } catch (error) {
+    console.error('[Probe Segment] External service error:', error);
     throw error;
   }
 }
@@ -459,62 +377,85 @@ function analyzeAggregateData(results: any[]): any {
     recommendations: new Set<string>()
   };
 
+  // Track counts for proper averaging
+  let durationCount = 0;
+  let bitrateCount = 0;
+
   // Analyze each segment
   results.forEach(result => {
     const analysis = result.analysis;
     
     // Duration consistency
-    const duration = analysis.format.duration;
-    aggregate.consistency.duration.min = Math.min(aggregate.consistency.duration.min, duration);
-    aggregate.consistency.duration.max = Math.max(aggregate.consistency.duration.max, duration);
-    aggregate.averages.duration += duration;
+    if (analysis.format && analysis.format.duration) {
+      const duration = analysis.format.duration;
+      aggregate.consistency.duration.min = Math.min(aggregate.consistency.duration.min, duration);
+      aggregate.consistency.duration.max = Math.max(aggregate.consistency.duration.max, duration);
+      aggregate.averages.duration += duration;
+      durationCount++;
+    }
 
     // Bitrate consistency
-    const bitrate = analysis.format.bitRate;
-    if (bitrate) {
+    if (analysis.format && analysis.format.bitRate) {
+      const bitrate = analysis.format.bitRate;
       aggregate.consistency.bitrate.min = Math.min(aggregate.consistency.bitrate.min, bitrate);
       aggregate.consistency.bitrate.max = Math.max(aggregate.consistency.bitrate.max, bitrate);
       aggregate.averages.bitrate += bitrate;
+      bitrateCount++;
     }
 
     // Resolution and codec tracking
-    if (analysis.video.width && analysis.video.height) {
+    if (analysis.video && analysis.video.width && analysis.video.height) {
       tempSets.resolution.add(`${analysis.video.width}x${analysis.video.height}`);
     }
-    if (analysis.video.codecName) {
+    if (analysis.video && analysis.video.codecName) {
       tempSets.videoCodecs.add(analysis.video.codecName);
     }
-    if (analysis.audio.codecName) {
+    if (analysis.audio && analysis.audio.codecName) {
       tempSets.audioCodecs.add(analysis.audio.codecName);
     }
 
     // Aggregate issues
-    if (analysis.hls.compliance.issues) {
-      aggregate.issues.total += analysis.hls.compliance.issues.length;
-      analysis.hls.compliance.issues.forEach((issue: string) => {
+    if (analysis.hls && analysis.hls.issues) {
+      aggregate.issues.total += analysis.hls.issues.length;
+      analysis.hls.issues.forEach((issue: string) => {
         const type = issue.split(':')[0];
         aggregate.issues.byType[type] = (aggregate.issues.byType[type] || 0) + 1;
       });
     }
 
     // Collect recommendations
-    analysis.hls.recommendations.forEach((rec: string) => {
-      tempSets.recommendations.add(rec);
-    });
+    if (analysis.hls && analysis.hls.recommendations) {
+      analysis.hls.recommendations.forEach((rec: string) => {
+        tempSets.recommendations.add(rec);
+      });
+    }
   });
 
   // Calculate averages
-  aggregate.averages.duration /= results.length;
-  aggregate.averages.bitrate /= results.filter(r => r.analysis.format.bitRate).length || 1;
-  aggregate.consistency.duration.avg = aggregate.averages.duration;
-  aggregate.consistency.bitrate.avg = aggregate.averages.bitrate;
+  if (durationCount > 0) {
+    aggregate.averages.duration /= durationCount;
+    aggregate.consistency.duration.avg = aggregate.averages.duration;
+    
+    // Check consistency
+    const durationVariance = (aggregate.consistency.duration.max - aggregate.consistency.duration.min) / aggregate.consistency.duration.avg;
+    aggregate.consistency.duration.consistent = durationVariance < 0.1; // 10% variance threshold
+  } else {
+    aggregate.consistency.duration.min = 0;
+    aggregate.consistency.duration.max = 0;
+    aggregate.consistency.duration.consistent = true;
+  }
 
-  // Check consistency
-  const durationVariance = (aggregate.consistency.duration.max - aggregate.consistency.duration.min) / aggregate.consistency.duration.avg;
-  aggregate.consistency.duration.consistent = durationVariance < 0.1; // 10% variance threshold
-
-  const bitrateVariance = (aggregate.consistency.bitrate.max - aggregate.consistency.bitrate.min) / aggregate.consistency.bitrate.avg;
-  aggregate.consistency.bitrate.consistent = bitrateVariance < 0.2; // 20% variance threshold
+  if (bitrateCount > 0) {
+    aggregate.averages.bitrate /= bitrateCount;
+    aggregate.consistency.bitrate.avg = aggregate.averages.bitrate;
+    
+    const bitrateVariance = (aggregate.consistency.bitrate.max - aggregate.consistency.bitrate.min) / aggregate.consistency.bitrate.avg;
+    aggregate.consistency.bitrate.consistent = bitrateVariance < 0.2; // 20% variance threshold
+  } else {
+    aggregate.consistency.bitrate.min = 0;
+    aggregate.consistency.bitrate.max = 0;
+    aggregate.consistency.bitrate.consistent = true;
+  }
 
   // Convert sets to arrays for JSON serialization
   aggregate.consistency.resolution = Array.from(tempSets.resolution);
