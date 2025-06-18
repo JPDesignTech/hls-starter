@@ -992,9 +992,9 @@ export default function VideoAnalyzePage() {
               </CardHeader>
               <CardContent className="space-y-2">
                 {videoData.files && videoData.files.length > 0 ? (
-                  videoData.files.map((file) => (
+                  videoData.files.map((file, index) => (
                     <div
-                      key={file.name}
+                      key={`${file.name}-${index}`}
                       className={`p-3 rounded-lg transition-colors ${
                         selectedManifest === file.url
                           ? 'bg-purple-600/30 border-purple-500'
@@ -1090,9 +1090,9 @@ export default function VideoAnalyzePage() {
                 <div>
                   <p className="text-sm text-gray-400">Quality Levels</p>
                   <div className="flex flex-wrap gap-2 mt-1">
-                    {videoData.qualities?.map((q) => (
+                    {videoData.qualities?.map((q, index) => (
                       <span
-                        key={q.name}
+                        key={`${q.name}-${q.bandwidth || index}`}
                         className="px-2 py-1 bg-purple-600/30 text-purple-300 rounded text-xs"
                       >
                         {q.name}
