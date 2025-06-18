@@ -7,7 +7,7 @@ export async function POST(
   request: NextRequest,
 ) {
   try {
-    const { segmentUrl, segmentUrls, batchMode = false, detailed = false, byteRange, segmentDuration } = await request.json();
+    const { segmentUrl, segmentUrls, batchMode = false, detailed = false, byteRange, segmentDuration, initSegmentUrl } = await request.json();
     
     if (!batchMode) {
       // Single segment mode
@@ -16,7 +16,10 @@ export async function POST(
       }
 
       console.log('[Probe Segment] Running ffprobe on:', segmentUrl);
-      const probeResult = await probeSegment(segmentUrl, detailed, byteRange, segmentDuration);
+      if (initSegmentUrl) {
+        console.log('[Probe Segment] With init segment:', initSegmentUrl);
+      }
+      const probeResult = await probeSegment(segmentUrl, detailed, byteRange, segmentDuration, initSegmentUrl);
       
       return NextResponse.json({
         raw: probeResult.raw,
@@ -30,6 +33,9 @@ export async function POST(
       }
 
       console.log('[Probe Segment] Running batch ffprobe on', segmentUrls.length, 'segments');
+      if (initSegmentUrl) {
+        console.log('[Probe Segment] With init segment:', initSegmentUrl);
+      }
       
       const results = await Promise.all(
         segmentUrls.map(async (urlData, index) => {
@@ -39,7 +45,7 @@ export async function POST(
             const segmentByteRange = typeof urlData === 'object' ? urlData.byteRange : undefined;
             const duration = typeof urlData === 'object' ? urlData.duration : undefined;
             
-            const result = await probeSegment(actualUrl, false, segmentByteRange, duration); // Use non-detailed mode for batch
+            const result = await probeSegment(actualUrl, false, segmentByteRange, duration, initSegmentUrl); // Use non-detailed mode for batch
             return { url: actualUrl, ...result, success: true };
           } catch (error) {
             const url = typeof urlData === 'object' ? urlData.url : urlData;
@@ -68,7 +74,7 @@ export async function POST(
   }
 }
 
-async function probeSegment(segmentUrl: string, detailed: boolean = false, byteRange?: { offset: number; length: number }, segmentDuration?: number) {
+async function probeSegment(segmentUrl: string, detailed: boolean = false, byteRange?: { offset: number; length: number }, segmentDuration?: number, initSegmentUrl?: string) {
   const ffprobeServiceUrl = process.env.FFPROBE_SERVICE_URL || process.env.NEXT_PUBLIC_FFPROBE_SERVICE_URL;
   
   if (!ffprobeServiceUrl) {
@@ -83,6 +89,7 @@ async function probeSegment(segmentUrl: string, detailed: boolean = false, byteR
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         url: segmentUrl,
+        initUrl: initSegmentUrl,
         detailed
       }),
       // Add timeout for reliability
@@ -133,7 +140,8 @@ function analyzeHLSSegment(probeData: any, detailed: boolean = false, byteRange?
       nbStreams: probeData.format.nb_streams,
       nbPrograms: probeData.format.nb_programs,
       tags: probeData.format.tags || {},
-      isSegment: !!byteRange || !!segmentDuration // Flag to indicate this is a segment analysis
+      isSegment: !!byteRange || !!segmentDuration, // Flag to indicate this is a segment analysis
+      isFmp4: probeData.format.format_name && (probeData.format.format_name.includes('mp4') || probeData.format.format_name.includes('mov'))
     };
 
     // If we have byte range, calculate approximate bitrate based on segment size and duration
@@ -329,13 +337,24 @@ function analyzeHLSSegment(probeData: any, detailed: boolean = false, byteRange?
 
   // Check container format
   if (analysis.format.formatName && !analysis.format.formatName.includes('mpegts')) {
-    analysis.hls.issues.push('Container format should be MPEG-TS for HLS segments');
-    analysis.hls.recommendations.push('Use MPEG-TS container format for maximum compatibility');
-    analysis.hls.specs.push({
-      section: '3.1',
-      description: 'Media segment format',
-      url: 'https://datatracker.ietf.org/doc/html/rfc8216#section-3.1'
-    });
+    // Check if it's fMP4 which is also valid for HLS
+    if (analysis.format.formatName.includes('mp4') || analysis.format.formatName.includes('mov')) {
+      analysis.hls.issues.push('Using fMP4 container format - ensure compatibility with target devices');
+      analysis.hls.recommendations.push('fMP4 is supported in HLS v7+ and provides better compression efficiency');
+      analysis.hls.specs.push({
+        section: '3.3',
+        description: 'MPEG-4 Fragments',
+        url: 'https://datatracker.ietf.org/doc/html/rfc8216#section-3.3'
+      });
+    } else {
+      analysis.hls.issues.push('Container format should be MPEG-TS or fMP4 for HLS segments');
+      analysis.hls.recommendations.push('Use MPEG-TS container format for maximum compatibility or fMP4 for modern devices');
+      analysis.hls.specs.push({
+        section: '3.1',
+        description: 'Media segment format',
+        url: 'https://datatracker.ietf.org/doc/html/rfc8216#section-3.1'
+      });
+    }
   }
 
   // Set overall compliance
@@ -386,7 +405,7 @@ function analyzeAggregateData(results: any[]): any {
     const analysis = result.analysis;
     
     // Duration consistency
-    if (analysis.format && analysis.format.duration) {
+    if (analysis?.format?.duration && typeof analysis.format.duration === 'number') {
       const duration = analysis.format.duration;
       aggregate.consistency.duration.min = Math.min(aggregate.consistency.duration.min, duration);
       aggregate.consistency.duration.max = Math.max(aggregate.consistency.duration.max, duration);
@@ -395,7 +414,7 @@ function analyzeAggregateData(results: any[]): any {
     }
 
     // Bitrate consistency
-    if (analysis.format && analysis.format.bitRate) {
+    if (analysis?.format?.bitRate && analysis.format.bitRate > 0) {
       const bitrate = analysis.format.bitRate;
       aggregate.consistency.bitrate.min = Math.min(aggregate.consistency.bitrate.min, bitrate);
       aggregate.consistency.bitrate.max = Math.max(aggregate.consistency.bitrate.max, bitrate);
@@ -404,27 +423,32 @@ function analyzeAggregateData(results: any[]): any {
     }
 
     // Resolution and codec tracking
-    if (analysis.video && analysis.video.width && analysis.video.height) {
-      tempSets.resolution.add(`${analysis.video.width}x${analysis.video.height}`);
+    if (analysis?.video) {
+      if (analysis.video.width && analysis.video.height) {
+        tempSets.resolution.add(`${analysis.video.width}x${analysis.video.height}`);
+      }
+      if (analysis.video.codecName) {
+        tempSets.videoCodecs.add(analysis.video.codecName);
+      }
     }
-    if (analysis.video && analysis.video.codecName) {
-      tempSets.videoCodecs.add(analysis.video.codecName);
-    }
-    if (analysis.audio && analysis.audio.codecName) {
-      tempSets.audioCodecs.add(analysis.audio.codecName);
+    
+    if (analysis?.audio) {
+      if (analysis.audio.codecName) {
+        tempSets.audioCodecs.add(analysis.audio.codecName);
+      }
     }
 
     // Aggregate issues
-    if (analysis.hls && analysis.hls.issues) {
+    if (analysis?.hls?.issues) {
       aggregate.issues.total += analysis.hls.issues.length;
       analysis.hls.issues.forEach((issue: string) => {
-        const type = issue.split(':')[0];
+        const type = issue.split(':')[0] || issue;
         aggregate.issues.byType[type] = (aggregate.issues.byType[type] || 0) + 1;
       });
     }
 
     // Collect recommendations
-    if (analysis.hls && analysis.hls.recommendations) {
+    if (analysis?.hls?.recommendations) {
       analysis.hls.recommendations.forEach((rec: string) => {
         tempSets.recommendations.add(rec);
       });

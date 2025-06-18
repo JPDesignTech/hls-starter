@@ -1,6 +1,11 @@
 const express = require('express');
 const { exec } = require('child_process');
 const { promisify } = require('util');
+const fs = require('fs');
+const path = require('path');
+const os = require('os');
+const https = require('https');
+const http = require('http');
 
 console.log('Starting FFprobe service...');
 console.log('Node version:', process.version);
@@ -31,13 +36,73 @@ exec('ffprobe -version', (error, stdout, stderr) => {
   }
 });
 
+// Helper function to download a file
+function downloadFile(url, destPath) {
+  return new Promise((resolve, reject) => {
+    const file = fs.createWriteStream(destPath);
+    const protocol = url.startsWith('https') ? https : http;
+    
+    protocol.get(url, (response) => {
+      if (response.statusCode !== 200) {
+        reject(new Error(`Failed to download: ${response.statusCode}`));
+        return;
+      }
+      
+      response.pipe(file);
+      
+      file.on('finish', () => {
+        file.close();
+        resolve();
+      });
+    }).on('error', (err) => {
+      fs.unlink(destPath, () => {}); // Delete the file on error
+      reject(err);
+    });
+  });
+}
+
 // Main probe endpoint
 app.post('/probe', async (req, res) => {
+  let tempFiles = [];
+  
   try {
-    const { url, detailed = false } = req.body;
+    const { url, initUrl, detailed = false } = req.body;
     
     if (!url) {
       return res.status(400).json({ error: 'URL is required' });
+    }
+
+    let targetFile = url;
+    
+    // Handle fMP4 segments with initialization segment
+    if (initUrl && url.match(/\.(m4s|mp4)$/i)) {
+      console.log('Processing fMP4 segment with initialization...');
+      
+      const tempDir = os.tmpdir();
+      const initFile = path.join(tempDir, `init_${Date.now()}.mp4`);
+      const segmentFile = path.join(tempDir, `segment_${Date.now()}.m4s`);
+      const combinedFile = path.join(tempDir, `combined_${Date.now()}.mp4`);
+      
+      tempFiles = [initFile, segmentFile, combinedFile];
+      
+      try {
+        // Download both files
+        console.log('Downloading init segment:', initUrl);
+        await downloadFile(initUrl, initFile);
+        
+        console.log('Downloading media segment:', url);
+        await downloadFile(url, segmentFile);
+        
+        // Concatenate files (init + segment)
+        console.log('Concatenating segments...');
+        await execAsync(`cat "${initFile}" "${segmentFile}" > "${combinedFile}"`);
+        
+        targetFile = combinedFile;
+      } catch (downloadError) {
+        console.error('Error processing fMP4:', downloadError);
+        // Fall back to analyzing just the segment
+        targetFile = url;
+      }
     }
 
     // Construct ffprobe command
@@ -63,7 +128,7 @@ app.post('/probe', async (req, res) => {
       );
     }
 
-    ffprobeCmd.push(`"${url}"`);
+    ffprobeCmd.push(`"${targetFile}"`);
     const command = ffprobeCmd.join(' ');
 
     console.log('Running ffprobe:', command);
@@ -83,6 +148,7 @@ app.post('/probe', async (req, res) => {
       metadata: {
         detailed,
         url,
+        initUrl,
         timestamp: new Date().toISOString()
       }
     });
@@ -93,6 +159,17 @@ app.post('/probe', async (req, res) => {
       success: false,
       error: error.message,
       code: error.code
+    });
+  } finally {
+    // Clean up temp files
+    tempFiles.forEach(file => {
+      try {
+        if (fs.existsSync(file)) {
+          fs.unlinkSync(file);
+        }
+      } catch (err) {
+        console.error('Error cleaning up temp file:', file, err);
+      }
     });
   }
 });

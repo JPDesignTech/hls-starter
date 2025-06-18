@@ -86,6 +86,7 @@ interface ParsedManifest {
     resolution: string;
     uri: string;
   }>;
+  initSegment?: string; // URL of the initialization segment for fMP4
 }
 
 interface ProbeData {
@@ -350,6 +351,18 @@ export default function VideoAnalyzePage() {
       // Parse media playlist
       let segmentIndex = 0;
       let byteRangeStart = 0;
+      let initSegment: string | null = null;
+      
+      // Check for fMP4 initialization segment
+      for (let i = 0; i < lines.length; i++) {
+        if (lines[i].startsWith('#EXT-X-MAP')) {
+          const uriMatch = lines[i].match(/URI="([^"]+)"/);
+          if (uriMatch) {
+            initSegment = uriMatch[1];
+          }
+          break;
+        }
+      }
       
       for (let i = 0; i < lines.length; i++) {
         if (lines[i].startsWith('#EXT-X-VERSION')) {
@@ -386,10 +399,58 @@ export default function VideoAnalyzePage() {
             parsed.segments.push(segment);
             parsed.totalDuration += duration;
           }
+        } else if (lines[i].startsWith('#EXT-X-MEDIA')) {
+          // Handle fMP4 media tags - these can contain segments in URI attributes
+          const uriMatch = lines[i].match(/URI="([^"]+)"/);
+          if (uriMatch && uriMatch[1].match(/\.(mp4|m4s)$/i)) {
+            // This is likely a segment, add it with a default duration
+            const segment: Segment = {
+              duration: parsed.targetDuration || 6, // Use target duration as estimate
+              uri: uriMatch[1],
+              index: segmentIndex++,
+            };
+            parsed.segments.push(segment);
+            parsed.totalDuration += segment.duration;
+          }
+        } else if (!lines[i].startsWith('#') && lines[i].trim() && lines[i].match(/\.(mp4|m4s)$/i)) {
+          // Handle standalone fMP4 segment files without EXTINF tags
+          // This happens in some fMP4 playlists
+          const segment: Segment = {
+            duration: parsed.targetDuration || 6, // Use target duration as estimate
+            uri: lines[i].trim(),
+            index: segmentIndex++,
+          };
+          parsed.segments.push(segment);
+          parsed.totalDuration += segment.duration;
         }
+      }
+      
+      // If we found an init segment but no regular segments, it might be a different format
+      if (initSegment && parsed.segments.length === 0) {
+        console.log('Found init segment but no media segments, checking for different format');
+        
+        // Look for segment files without EXTINF tags (common in fMP4)
+        for (let i = 0; i < lines.length; i++) {
+          if (!lines[i].startsWith('#') && lines[i].trim() && 
+              (lines[i].match(/\.(mp4|m4s)$/i) || lines[i].match(/fileSequence\d+/))) {
+            const segment: Segment = {
+              duration: parsed.targetDuration || 6,
+              uri: lines[i].trim(),
+              index: segmentIndex++,
+            };
+            parsed.segments.push(segment);
+            parsed.totalDuration += segment.duration;
+          }
+        }
+      }
+      
+      // Store the initialization segment URL if found
+      if (initSegment) {
+        parsed.initSegment = initSegment;
       }
     }
     
+    console.log('Parsed manifest:', parsed);
     return parsed;
   }
 
@@ -590,6 +651,14 @@ export default function VideoAnalyzePage() {
       const segmentUrl = segment.uri.startsWith('http') 
         ? segment.uri 
         : resolveUrl(segment.uri, selectedManifest);
+        
+      // Resolve init segment URL if present
+      let initSegmentUrl = undefined;
+      if (parsedManifest?.initSegment) {
+        initSegmentUrl = parsedManifest.initSegment.startsWith('http')
+          ? parsedManifest.initSegment
+          : resolveUrl(parsedManifest.initSegment, selectedManifest);
+      }
 
       const response = await fetch(`/api/video/${videoId}/probe-segment`, {
         method: 'POST',
@@ -598,6 +667,7 @@ export default function VideoAnalyzePage() {
         },
         body: JSON.stringify({
           segmentUrl,
+          initSegmentUrl, // Pass init segment URL for fMP4
           detailed: detailedAnalysis,
           byteRange: segment.byteRange,
           segmentDuration: segment.duration
@@ -632,6 +702,14 @@ export default function VideoAnalyzePage() {
     setBatchProbeData(null);
 
     try {
+      // Resolve init segment URL if present
+      let initSegmentUrl = undefined;
+      if (parsedManifest.initSegment) {
+        initSegmentUrl = parsedManifest.initSegment.startsWith('http')
+          ? parsedManifest.initSegment
+          : resolveUrl(parsedManifest.initSegment, selectedManifest);
+      }
+      
       // Prepare segment URLs with metadata
       const segmentUrls = parsedManifest.segments.map(segment => {
         const url = segment.uri.startsWith('http')
@@ -654,6 +732,7 @@ export default function VideoAnalyzePage() {
         },
         body: JSON.stringify({
           segmentUrls,
+          initSegmentUrl, // Pass init segment URL for fMP4
           batchMode: true,
           detailed: false // Always use basic mode for batch to avoid timeouts
         }),
@@ -1436,21 +1515,17 @@ export default function VideoAnalyzePage() {
                                   <div className="bg-black/30 rounded-lg p-3">
                                     <h5 className="text-sm font-semibold text-gray-300 mb-2 flex items-center gap-1">
                                       <HardDrive className="h-3 w-3" />
-                                      Format
+                                      Format Information
                                     </h5>
-                                    <div className="grid grid-cols-2 gap-2 text-xs">
-                                      <div>
-                                        <span className="text-gray-400 flex items-center gap-1">
-                                          Container:
-                                          <InfoPopover
-                                            title="Container Format"
-                                            description="The media container format. HLS typically uses MPEG-TS (.ts) for compatibility or fMP4 for newer implementations."
-                                            specLink="https://datatracker.ietf.org/doc/html/rfc8216#section-3.1"
-                                            specSection="3.1"
-                                          />
-                                        </span>
-                                        <span className="text-white ml-1 font-mono">{probeData.analysis.format.formatName}</span>
+                                    {probeData.analysis.format.isFmp4 && (
+                                      <div className="bg-blue-500/20 border border-blue-500/30 rounded p-2 mb-2">
+                                        <p className="text-xs text-blue-300 flex items-center gap-1">
+                                          <AlertCircle className="h-3 w-3" />
+                                          fMP4 Segment (Fragmented MP4)
+                                        </p>
                                       </div>
+                                    )}
+                                    <div className="grid grid-cols-2 gap-2 text-xs">
                                       <div>
                                         <span className="text-gray-400 flex items-center gap-1">
                                           Duration:
@@ -1483,7 +1558,11 @@ export default function VideoAnalyzePage() {
                                             specSection="4.3.4.2"
                                           />
                                         </span>
-                                        <span className="text-white ml-1 font-mono">{(probeData.analysis.format.bitRate / 1000).toFixed(0)} kbps</span>
+                                        <span className="text-white ml-1 font-mono">{probeData.analysis.format.bitRate > 0 ? (probeData.analysis.format.bitRate / 1000).toFixed(0) + ' kbps' : 'N/A'}</span>
+                                      </div>
+                                      <div>
+                                        <span className="text-gray-400">Format:</span>
+                                        <span className="text-white ml-1 font-mono">{probeData.analysis.format.formatName || 'Unknown'}</span>
                                       </div>
                                     </div>
                                   </div>

@@ -5,6 +5,7 @@ FROM node:18-alpine
 RUN apk add --no-cache \
     ffmpeg \
     ca-certificates \
+    coreutils \
     && rm -rf /var/cache/apk/*
 
 WORKDIR /app
