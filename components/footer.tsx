@@ -23,7 +23,8 @@ export function Footer() {
                 Descript
               </Link>
               . It demonstrates the power of AI-assisted development by building a production-ready 
-              HLS analysis tool that generates playlists and provides deep inspection of video segments.
+              HLS analysis tool that generates playlists, provides deep inspection of video segments,
+              and detects potential corruption issues in media files using FFProbe.
             </p>
           </div>
 
@@ -44,7 +45,7 @@ export function Footer() {
                 <span className="text-gray-400">Storage:</span> Google Cloud Storage, Redis (Upstash)
               </p>
               <p>
-                <span className="text-gray-400">Analysis:</span> FFprobe service for deep HLS segment inspection
+                <span className="text-gray-400">Analysis:</span> FFprobe service for deep HLS segment inspection and corruption detection
               </p>
             </div>
           </div>

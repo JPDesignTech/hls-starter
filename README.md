@@ -1,6 +1,6 @@
 # BeemMeUp - HLS Streaming Service
 
-A modern HLS (HTTP Live Streaming) video streaming application built with Next.js 15, Google Cloud Platform services, and adaptive bitrate streaming. Upload videos to automatically generate multi-quality HLS streams with deep analysis capabilities.
+A modern HLS (HTTP Live Streaming) video streaming application built with Next.js 15, Google Cloud Platform services, and adaptive bitrate streaming. Upload videos to automatically generate multi-quality HLS streams with deep analysis capabilities. Plus, detect and fix corruption issues in media files using FFProbe analysis.
 
 ## 🚀 Features
 
@@ -30,6 +30,7 @@ A modern HLS (HTTP Live Streaming) video streaming application built with Next.j
 - 🎯 Support for both TS and fMP4 segments
 - 🌐 HLS proxy for external playlist analysis
 - 💾 Persistent video history with Redis
+- 🛡️ Video corruption detection and repair suggestions using FFProbe
 
 ## 🏗️ System Architecture
 
@@ -237,7 +238,7 @@ graph LR
 
 1. Clone the repository:
    ```bash
-   git clone [your-repo-url]
+   git clone 
    cd hls-starter
    ```
 
@@ -294,8 +295,10 @@ hls-starter/
 │   │   ├── upload/         # Video upload endpoints
 │   │   ├── process/        # Transcoding initiation
 │   │   ├── hls-proxy/      # HLS playlist proxy
+│   │   ├── corruption-check/ # Video corruption detection endpoint
 │   │   └── video/          # Video status and analysis
 │   ├── video/[id]/analyze/ # HLS analyzer interface
+│   ├── corruption-check/   # Video corruption checker interface
 │   └── page.tsx            # Main upload interface
 ├── components/
 │   ├── video-player.tsx    # HLS.js video player
@@ -374,7 +377,23 @@ The video player leverages hls.js to:
 - Buffer segments intelligently
 - Provide smooth playback across devices
 
-## �� Configuration
+### 6. Video Corruption Detection
+
+The corruption checker uses FFProbe to:
+- **Detect Common Issues**: Missing metadata, codec problems, sync errors
+- **Analyze File Structure**: Check for missing moov atoms, corrupted headers
+- **Identify Stream Problems**: Audio/video sync drift, timestamp issues
+- **Provide Fix Commands**: Generate specific FFmpeg commands to repair issues
+- **Support Multiple Formats**: MP4, MOV, MKV, WebM, AVI, and more
+
+Common issues detected:
+- Missing or misplaced moov atoms
+- Codec parameter mismatches
+- Audio-video synchronization problems
+- Damaged frames or bitstream corruption
+- Container format inconsistencies
+
+## 🔄 Configuration
 
 ### Google Cloud Transcoder Settings
 The transcoder is configured in `lib/transcoder.ts` with the following presets:
@@ -495,6 +514,51 @@ Analyze HLS segment with FFprobe (via Cloud Run).
 
 #### GET `/api/hls-proxy?url={playlistUrl}`
 Proxy and rewrite HLS playlists for CORS and relative URL handling.
+
+### Corruption Detection
+
+#### POST `/api/corruption-check`
+Analyze video file for corruption issues and get repair suggestions.
+
+**Request**:
+```json
+{
+  "filename": "1234567890/source.mp4",
+  "originalName": "video.mp4",
+  "gcsPath": "1234567890/source.mp4"
+}
+```
+
+**Response**:
+```json
+{
+  "videoId": "1234567890",
+  "filename": "video.mp4",
+  "fileSize": 104857600,
+  "issues": [
+    {
+      "type": "Missing moov atom",
+      "severity": "critical",
+      "description": "The moov atom is missing or at the end of the file",
+      "detection": "No moov atom found",
+      "fixCommand": "ffmpeg -i input.mp4 -movflags faststart -c copy output.mp4",
+      "explanation": "This moves the moov atom to the beginning for progressive playback"
+    }
+  ],
+  "metadata": {
+    "format": "mp4",
+    "duration": 120.5,
+    "bitrate": 5000000,
+    "hasVideo": true,
+    "hasAudio": true,
+    "videoCodec": "h264",
+    "audioCodec": "aac",
+    "resolution": "1920x1080",
+    "fps": 30
+  },
+  "analyzedAt": "2024-01-01T00:00:00Z"
+}
+```
 
 ## 🚀 Deployment
 
@@ -625,11 +689,6 @@ gcloud run deploy ffprobe-analyzer \
 - [ ] Real-time transcoding
 - [ ] Multi-audio track support
 - [ ] Subtitle/caption support
-- [ ] DRM integration
-- [ ] Analytics dashboard
-- [ ] Webhook notifications
-- [ ] Batch processing
-- [ ] Mobile SDKs
 
 ## 📄 License
 

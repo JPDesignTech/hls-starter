@@ -9,7 +9,7 @@ import { Progress } from '@/components/ui/progress';
 import { VideoPlayer } from '@/components/video-player';
 import { DirectUpload } from '@/components/direct-upload';
 import { ChunkedUpload } from '@/components/chunked-upload';
-import { Upload, Video, Loader2, CheckCircle2, AlertCircle, Zap, CloudUpload, Package, Server, BarChart3, Link as LinkIcon, Trash2, X } from 'lucide-react';
+import { Upload, Video, Loader2, CheckCircle2, AlertCircle, Zap, CloudUpload, Package, Server, BarChart3, Link as LinkIcon, Trash2, X, ShieldCheck } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import HlsSpecTips from '@/components/hls-spec-tips';
@@ -319,7 +319,8 @@ export default function HomePage() {
           </div>
           <p className="text-lg text-gray-300 max-w-2xl mx-auto">
             Upload your video to generate HLS playlists and analyze them with deep segment inspection, 
-            quality level analysis, and adaptive bitrate configurations ✨
+            quality level analysis, and adaptive bitrate configurations. Plus, use FFProbe to detect 
+            and fix potential corruption issues in media files ✨
           </p>
           <div className="max-w-3xl mx-auto mt-6">
             <HlsSpecTips />
@@ -705,6 +706,34 @@ export default function HomePage() {
             </Card>
           ))}
         </div>
+
+        {/* Corruption Checker Feature Card */}
+        <Card className="mt-8 bg-gradient-to-br from-green-600/20 to-emerald-600/20 backdrop-blur-lg border-green-500/30">
+          <CardHeader>
+            <CardTitle className="text-white flex items-center gap-2">
+              <div className="p-2 bg-green-500/20 rounded-lg">
+                <ShieldCheck className="h-6 w-6 text-green-400" />
+              </div>
+              Video Corruption Checker
+            </CardTitle>
+            <CardDescription className="text-gray-300">
+              Detect and fix common video file corruption issues
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <p className="text-sm text-gray-300 mb-4">
+              Upload any video file to check for corruption issues including missing metadata, 
+              codec problems, sync issues, and damaged frames. Get detailed analysis and FFmpeg 
+              commands to fix detected problems.
+            </p>
+            <Link href="/corruption-check">
+              <Button className="w-full bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white">
+                <ShieldCheck className="mr-2 h-4 w-4" />
+                Open Corruption Checker
+              </Button>
+            </Link>
+          </CardContent>
+        </Card>
 
         {/* Empty State */}
         {videos.length === 0 && (
