@@ -1,10 +1,10 @@
 import { Redis } from '@upstash/redis';
 
 // Initialize Redis only if credentials are provided
-const redis = process.env.KV_REST_API_URL && process.env.KV_REST_API_TOKEN
+const redis = process.env.STORAGE_KV_REST_API_URL && process.env.STORAGE_KV_REST_API_TOKEN
   ? new Redis({
-      url: process.env.KV_REST_API_URL,
-      token: process.env.KV_REST_API_TOKEN
+      url: process.env.STORAGE_KV_REST_API_URL,
+      token: process.env.STORAGE_KV_REST_API_TOKEN
     })
   : null;
 
