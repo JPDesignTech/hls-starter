@@ -13,10 +13,11 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Validate content type
-    if (!contentType.startsWith('video/')) {
+    // Validate content type - accept video, audio, and image files
+    const validTypes = ['video/', 'audio/', 'image/'];
+    if (!validTypes.some(type => contentType.startsWith(type))) {
       return NextResponse.json(
-        { error: 'Invalid content type. Must be a video file.' },
+        { error: 'Invalid content type. Must be a video, audio, or image file.' },
         { status: 400 }
       );
     }
@@ -33,9 +34,9 @@ export async function POST(request: NextRequest) {
     const storage = createStorage();
     const bucket = storage.bucket(bucketName);
 
-    const videoId = uuidv4();
+    const fileId = uuidv4();
     const fileExtension = filename.split('.').pop();
-    const gcsFilename = `${videoId}/original.${fileExtension}`;
+    const gcsFilename = `${fileId}/original.${fileExtension}`;
 
     // Generate a signed URL for uploading
     const [url] = await bucket.file(gcsFilename).getSignedUrl({
@@ -47,14 +48,19 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({
       uploadUrl: url,
-      videoId,
+      videoId: fileId, // Use videoId for consistency with existing flow
+      fileId, // Also return fileId for WTF
       filename: gcsFilename,
     });
   } catch (error) {
-    console.error('Error generating signed URL:', error);
+    console.error('[WTF Upload] Error generating signed URL:', error);
     return NextResponse.json(
-      { error: 'Failed to generate upload URL' },
+      { 
+        error: 'Failed to generate upload URL',
+        details: error instanceof Error ? error.message : 'Unknown error'
+      },
       { status: 500 }
     );
   }
-} 
+}
+
