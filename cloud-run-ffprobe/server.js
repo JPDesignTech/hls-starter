@@ -306,6 +306,174 @@ app.post('/extract-frame', async (req, res) => {
   }
 });
 
+// Bitstream extraction endpoint
+app.post('/extract-bitstream', async (req, res) => {
+  let tempFiles = [];
+  
+  try {
+    const { url, streamIndex = 0, format = 'hex', codec, byteRange } = req.body;
+    
+    if (!url) {
+      return res.status(400).json({ error: 'URL is required' });
+    }
+    
+    // Validate byteRange if provided
+    let startByte = 0;
+    let endByte = null;
+    if (byteRange) {
+      if (typeof byteRange === 'object' && byteRange.start !== undefined) {
+        startByte = parseInt(byteRange.start, 10);
+        endByte = byteRange.end !== undefined ? parseInt(byteRange.end, 10) : null;
+      } else if (typeof byteRange === 'string') {
+        // Parse "start-end" format
+        const parts = byteRange.split('-');
+        startByte = parseInt(parts[0], 10);
+        endByte = parts[1] ? parseInt(parts[1], 10) : null;
+      }
+      if (isNaN(startByte) || startByte < 0) {
+        return res.status(400).json({ error: 'Invalid byteRange.start' });
+      }
+      if (endByte !== null && (isNaN(endByte) || endByte <= startByte)) {
+        return res.status(400).json({ error: 'Invalid byteRange.end' });
+      }
+    }
+
+    // Download video file if it's a URL
+    let targetFile = url;
+    const tempDir = os.tmpdir();
+    let downloadedFile = null;
+    
+    // If it's a URL (not a local file path), download it
+    if (url.startsWith('http://') || url.startsWith('https://')) {
+      downloadedFile = path.join(tempDir, `video_${Date.now()}_${Math.random().toString(36).substring(7)}.mp4`);
+      tempFiles.push(downloadedFile);
+      
+      console.log('Downloading video file for bitstream extraction:', url);
+      await downloadFile(url, downloadedFile);
+      targetFile = downloadedFile;
+    }
+
+    // Determine codec from parameter or detect from file
+    let detectedCodec = codec;
+    if (!detectedCodec) {
+      // Quick probe to detect codec
+      try {
+        const probeCmd = `ffprobe -v quiet -select_streams v:${streamIndex} -show_entries stream=codec_name -of default=noprint_wrappers=1:nokey=1 "${targetFile}"`;
+        const { stdout } = await execAsync(probeCmd, { maxBuffer: 1024 * 1024 });
+        detectedCodec = stdout.trim().toLowerCase();
+      } catch (err) {
+        console.warn('Could not detect codec, defaulting to h264:', err);
+        detectedCodec = 'h264';
+      }
+    }
+
+    // Determine output format and bitstream filter
+    let outputExt = '.h264';
+    let bsfFilter = 'h264_mp4toannexb';
+    let outputFormat = 'h264';
+    
+    if (detectedCodec === 'hevc' || detectedCodec === 'h265') {
+      outputExt = '.hevc';
+      bsfFilter = 'hevc_mp4toannexb';
+      outputFormat = 'hevc';
+    }
+
+    const outputFile = path.join(tempDir, `bitstream_${Date.now()}_${Math.random().toString(36).substring(7)}${outputExt}`);
+    tempFiles.push(outputFile);
+
+    // Build FFMPEG command to extract bitstream
+    const ffmpegCmdParts = [
+      'ffmpeg',
+      '-i', `"${targetFile}"`,
+      '-c:v', 'copy',
+      '-bsf:v', bsfFilter,
+      '-f', outputFormat,
+      '-map', `0:v:${streamIndex}`,
+      `"${outputFile}"`
+    ];
+    
+    const command = ffmpegCmdParts.join(' ');
+
+    console.log('Running ffmpeg for bitstream extraction:', command);
+    
+    const { stdout, stderr } = await execAsync(command, { maxBuffer: 10 * 1024 * 1024 });
+
+    if (stderr && !stderr.includes('frame=')) {
+      console.warn('FFmpeg stderr:', stderr);
+    }
+
+    // Check if output file was created
+    if (!fs.existsSync(outputFile)) {
+      throw new Error('Bitstream extraction failed: output file not created');
+    }
+
+    // Read the bitstream file
+    const fullBuffer = fs.readFileSync(outputFile);
+    const totalSize = fullBuffer.length;
+    
+    // Apply byte range if specified
+    let bitstreamBuffer = fullBuffer;
+    let actualStartByte = 0;
+    let actualEndByte = totalSize;
+    
+    if (byteRange && (startByte > 0 || endByte !== null)) {
+      actualStartByte = Math.min(startByte, totalSize);
+      actualEndByte = endByte !== null ? Math.min(endByte, totalSize) : totalSize;
+      
+      if (actualStartByte >= actualEndByte) {
+        return res.status(400).json({ 
+          error: `Invalid byte range: ${actualStartByte}-${actualEndByte} (file size: ${totalSize})` 
+        });
+      }
+      
+      bitstreamBuffer = fullBuffer.slice(actualStartByte, actualEndByte);
+    }
+    
+    // Convert to requested format
+    let bitstreamData;
+    if (format === 'base64') {
+      bitstreamData = bitstreamBuffer.toString('base64');
+    } else {
+      // Default to hex
+      bitstreamData = bitstreamBuffer.toString('hex');
+    }
+
+    res.json({
+      success: true,
+      bitstream: bitstreamData,
+      format: format,
+      codec: detectedCodec,
+      size: totalSize,
+      chunkSize: bitstreamBuffer.length,
+      byteRange: byteRange ? {
+        start: actualStartByte,
+        end: actualEndByte,
+        requested: { start: startByte, end: endByte }
+      } : null,
+      cached: false
+    });
+
+  } catch (error) {
+    console.error('Bitstream extraction error:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message,
+      code: error.code
+    });
+  } finally {
+    // Clean up temp files
+    tempFiles.forEach(file => {
+      try {
+        if (fs.existsSync(file)) {
+          fs.unlinkSync(file);
+        }
+      } catch (err) {
+        console.error('Error cleaning up temp file:', file, err);
+      }
+    });
+  }
+});
+
 const PORT = process.env.PORT || 8080;
 
 // Error handling for server startup

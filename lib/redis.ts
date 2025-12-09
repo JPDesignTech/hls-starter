@@ -17,6 +17,11 @@ export const kv = redis || {
     inMemoryStore.set(key, value);
     return 'OK';
   },
+  setex: async (key: string, seconds: number, value: any) => {
+    inMemoryStore.set(key, value);
+    // In-memory store doesn't support TTL, but we'll store it anyway
+    return 'OK';
+  },
   del: async (key: string) => {
     inMemoryStore.delete(key);
     return 1;

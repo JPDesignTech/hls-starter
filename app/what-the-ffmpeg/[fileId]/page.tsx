@@ -26,9 +26,17 @@ import {
   ChevronRight,
   Play,
   Pause,
-  FileDown
+  FileDown,
+  FileCode,
+  Binary,
+  Network
 } from 'lucide-react';
 import Link from 'next/link';
+import { HexViewer } from '@/components/bitstream/hex-viewer';
+import { BinaryVisualizer } from '@/components/bitstream/binary-visualizer';
+import { StructureTree } from '@/components/bitstream/structure-tree';
+import { ParameterSetViewer } from '@/components/bitstream/parameter-set-viewer';
+import { NALTimeline } from '@/components/bitstream/nal-timeline';
 
 interface FileMetadata {
   fileId: string;
@@ -95,10 +103,179 @@ export default function FileAnalysisPage() {
   const [packetPage, setPacketPage] = React.useState(0);
   const packetsPerPage = 50;
   const timelineRef = React.useRef<HTMLDivElement>(null);
+  
+  // Bitstream state
+  const [bitstreamData, setBitstreamData] = React.useState<any>(null);
+  const [loadingBitstream, setLoadingBitstream] = React.useState(false);
+  const [bitstreamError, setBitstreamError] = React.useState<string | null>(null);
+  const [bitstreamTab, setBitstreamTab] = React.useState('hex');
+  const [selectedOffset, setSelectedOffset] = React.useState<number | null>(null);
+  const [bitstreamAttempted, setBitstreamAttempted] = React.useState(false);
 
   // Compute derived values
   const currentFrame = framesData[currentFrameIndex];
   const videoStream = probeData?.streams?.find((s: any) => s.codec_type === 'video');
+  
+  // Load bitstream data (with optional chunking for large files)
+  const loadBitstream = React.useCallback(async (byteRange?: { start: number; end?: number }) => {
+    if (!videoStream || loadingBitstream) return;
+    
+    const abortController = new AbortController();
+    const timeoutId = setTimeout(() => {
+      abortController.abort();
+    }, 180000); // 3 minute timeout
+    
+    try {
+      setLoadingBitstream(true);
+      setBitstreamError(null);
+      setBitstreamAttempted(true);
+      
+      console.log('[Bitstream] Starting fetch...', byteRange ? `chunk ${byteRange.start}-${byteRange.end || 'end'}` : 'full');
+      const response = await fetch('/api/what-the-ffmpeg/bitstream', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          fileId,
+          streamIndex: 0,
+          format: 'hex',
+          codecSpecific: true,
+          maxSize: 5 * 1024 * 1024, // 5MB limit
+          byteRange, // Request specific chunk if provided
+        }),
+        signal: abortController.signal,
+      });
+
+      console.log('[Bitstream] Response received, status:', response.status);
+
+      if (response.ok) {
+        console.log('[Bitstream] Parsing JSON...');
+        const text = await response.text();
+        console.log('[Bitstream] Text received, length:', text.length);
+        
+        // Warn if response is very large
+        if (text.length > 10000000) { // > 10MB
+          console.warn('[Bitstream] Very large response detected:', text.length, 'bytes');
+        }
+        
+        // Parse JSON - this may take time for large files
+        let result;
+        try {
+          // For very large JSON, parse in chunks if possible
+          result = JSON.parse(text);
+        } catch (parseErr) {
+          console.error('[Bitstream] JSON parse error:', parseErr);
+          throw new Error(`Failed to parse bitstream data: ${parseErr instanceof Error ? parseErr.message : 'Unknown error'}. The file may be too large (${Math.round(text.length / 1024 / 1024 * 10) / 10}MB).`);
+        }
+        
+        console.log('[Bitstream] JSON parsed, success:', result.success);
+        
+        if (result.success) {
+          // Handle large files that require chunking
+          if (result.message && result.bitstream === null) {
+            // File is too large - we'll load metadata and first chunk
+            console.log('[Bitstream] Large file detected:', result.message);
+            
+            // Load first chunk (1MB)
+            const chunkSize = result.suggestedChunkSize || 1024 * 1024;
+            const firstChunkResponse = await fetch('/api/what-the-ffmpeg/bitstream', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                fileId,
+                streamIndex: 0,
+                format: 'hex',
+                codecSpecific: false, // Don't parse NAL units for chunks
+                byteRange: { start: 0, end: chunkSize },
+              }),
+            });
+            
+            if (firstChunkResponse.ok) {
+              const chunkResult = await firstChunkResponse.json();
+              if (chunkResult.success) {
+                setBitstreamData({
+                  ...result,
+                  bitstream: chunkResult.bitstream,
+                  isChunked: true,
+                  currentChunk: { start: 0, end: chunkSize },
+                  totalSize: result.statistics.totalSize,
+                });
+                console.log('[Bitstream] First chunk loaded');
+              } else {
+                setBitstreamData(result); // Store metadata at least
+              }
+            } else {
+              setBitstreamData(result); // Store metadata at least
+            }
+          } else {
+            // Normal file - store all data
+            const dataToStore = {
+              ...result,
+              bitstream: result.bitstream,
+              isChunked: false,
+            };
+            
+            setBitstreamData(dataToStore);
+            console.log('[Bitstream] Data set in state, size:', result.bitstream?.length || 0, 'hex chars');
+          }
+        } else {
+          setBitstreamError(result.error || 'Failed to load bitstream');
+        }
+      } else {
+        const errorText = await response.text().catch(() => '');
+        let errorMessage = 'Failed to load bitstream';
+        try {
+          const errorJson = JSON.parse(errorText);
+          errorMessage = errorJson.error || errorMessage;
+        } catch {
+          errorMessage = `HTTP ${response.status}: ${response.statusText}`;
+        }
+        setBitstreamError(errorMessage);
+      }
+    } catch (err) {
+      console.error('[Bitstream] Error:', err);
+      if (err instanceof Error) {
+        if (err.name === 'AbortError') {
+          setBitstreamError('Request timed out. The bitstream file is very large. Please try again or contact support.');
+        } else {
+          setBitstreamError(err.message || 'Failed to load bitstream');
+        }
+      } else {
+        setBitstreamError('Failed to load bitstream');
+      }
+    } finally {
+      clearTimeout(timeoutId);
+      // Ensure loading state is cleared, even if there's a delay
+      setTimeout(() => {
+        setLoadingBitstream(false);
+        console.log('[Bitstream] Loading state cleared');
+      }, 0);
+    }
+  }, [fileId, videoStream, loadingBitstream]);
+  
+  const handleOffsetClick = (offset: number) => {
+    setSelectedOffset(offset);
+    setBitstreamTab('hex'); // Switch to hex view when clicking on offset
+  };
+  
+  // Auto-load bitstream when video stream is available and bitstream tab is active
+  // Only attempt once - don't retry on error automatically
+  React.useEffect(() => {
+    if (videoStream && activeTab === 'bitstream' && !bitstreamData && !loadingBitstream && !bitstreamAttempted) {
+      loadBitstream();
+    }
+  }, [videoStream, activeTab, bitstreamData, loadingBitstream, bitstreamAttempted, loadBitstream]);
+
+  // Safety mechanism: ensure loading state clears after timeout
+  React.useEffect(() => {
+    if (loadingBitstream) {
+      const safetyTimeout = setTimeout(() => {
+        console.warn('[Bitstream] Safety timeout: forcing loading state to false');
+        setLoadingBitstream(false);
+      }, 200000); // 3.3 minutes - longer than the fetch timeout
+      
+      return () => clearTimeout(safetyTimeout);
+    }
+  }, [loadingBitstream]);
 
   // Scroll timeline to show current frame when it changes
   React.useEffect(() => {
@@ -1856,7 +2033,7 @@ export default function FileAnalysisPage() {
             )}
           </TabsContent>
 
-          {/* Bitstream Tab - Phase 4 Implementation */}
+          {/* Bitstream Tab */}
           <TabsContent value="bitstream" className="space-y-6">
             {!videoStream ? (
               <Card className="bg-gradient-to-br from-yellow-600/20 to-orange-600/20 backdrop-blur-lg border-yellow-500/30">
@@ -1867,6 +2044,7 @@ export default function FileAnalysisPage() {
               </Card>
             ) : (
               <>
+                {/* Codec Info Card */}
                 <Card className="bg-gradient-to-br from-yellow-600/20 to-orange-600/20 backdrop-blur-lg border-yellow-500/30">
                   <CardHeader>
                     <CardTitle className="text-white flex items-center gap-2">
@@ -1880,112 +2058,280 @@ export default function FileAnalysisPage() {
                   <CardContent>
                     <div className="space-y-4">
                       {['h264', 'hevc', 'h265'].includes((videoStream.codec_name || '').toLowerCase()) ? (
-                        <>
-                          <div className="bg-green-500/20 border border-green-500/50 rounded p-4">
-                            <p className="text-green-400 font-semibold mb-2">NAL Unit Analysis Supported</p>
-                            <p className="text-gray-300 text-sm">
-                              This codec supports NAL unit parsing, parameter set extraction (SPS/PPS/VPS), and slice header analysis.
-                            </p>
-                          </div>
-                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <div>
-                              <p className="text-sm text-gray-400 mb-2">Supported Analysis</p>
-                              <ul className="list-disc list-inside space-y-1 text-gray-300 text-sm">
-                                <li>NAL unit type identification</li>
-                                <li>SPS/PPS parameter extraction</li>
-                                <li>Slice header parsing</li>
-                                <li>Bitstream structure tree</li>
-                              </ul>
-                            </div>
-                            <div>
-                              <p className="text-sm text-gray-400 mb-2">Codec Information</p>
-                              <div className="space-y-1">
-                                {videoStream.profile && (
-                                  <p className="text-white font-mono text-sm">Profile: {videoStream.profile}</p>
-                                )}
-                                {videoStream.level && (
-                                  <p className="text-white font-mono text-sm">Level: {videoStream.level}</p>
-                                )}
-                                {videoStream.width && videoStream.height && (
-                                  <p className="text-white font-mono text-sm">
-                                    Resolution: {videoStream.width} × {videoStream.height}
-                                  </p>
-                                )}
-                              </div>
-                            </div>
-                          </div>
-                        </>
+                        <div className="bg-green-500/20 border border-green-500/50 rounded p-4">
+                          <p className="text-green-400 font-semibold mb-2">NAL Unit Analysis Supported</p>
+                          <p className="text-gray-300 text-sm">
+                            This codec supports NAL unit parsing, parameter set extraction (SPS/PPS/VPS), and slice header analysis.
+                          </p>
+                        </div>
                       ) : (
                         <div className="bg-yellow-500/20 border border-yellow-500/50 rounded p-4">
                           <p className="text-yellow-400 font-semibold mb-2">Limited Bitstream Support</p>
                           <p className="text-gray-300 text-sm">
-                            Advanced bitstream parsing (NAL units, parameter sets) is currently optimized for H.264/H.265 codecs.
+                            Advanced bitstream parsing (NAL units, parameter sets) is optimized for H.264/H.265 codecs.
                             Basic hex viewer and bitstream extraction are available for all codecs.
                           </p>
                         </div>
                       )}
-                      
-                      <div className="pt-4 border-t border-white/10">
-                        <p className="text-sm text-gray-400 mb-2">Coming Soon</p>
-                        <ul className="list-disc list-inside space-y-1 text-gray-300 text-sm">
-                          <li>Hex dump viewer with syntax highlighting</li>
-                          <li>Binary visualization</li>
-                          <li>Bitstream structure tree view</li>
-                          <li>Codec-specific parameter set visualization</li>
-                          <li>NAL unit timeline for H.264/H.265</li>
-                        </ul>
-                      </div>
                     </div>
                   </CardContent>
                 </Card>
 
-                {/* Codec-Specific Info */}
-                {videoStream && (
-                  <Card className="bg-gradient-to-br from-yellow-600/20 to-orange-600/20 backdrop-blur-lg border-yellow-500/30">
+                {/* Bitstream Viewer */}
+                {loadingBitstream ? (
+                  <Card className="bg-white/10 backdrop-blur-lg border-white/20">
+                    <CardContent className="p-12 text-center">
+                      <Loader2 className="h-8 w-8 animate-spin text-orange-400 mx-auto mb-4" />
+                      <p className="text-gray-300">Loading bitstream data...</p>
+                    </CardContent>
+                  </Card>
+                ) : bitstreamError ? (
+                  <Card className="bg-red-500/20 backdrop-blur-lg border-red-500/30">
+                    <CardContent className="p-6">
+                      <Alert className="bg-transparent border-0">
+                        <AlertCircle className="h-4 w-4" />
+                        <AlertTitle className="text-white">Error</AlertTitle>
+                        <AlertDescription className="text-gray-300">{bitstreamError}</AlertDescription>
+                      </Alert>
+                      <Button
+                        onClick={() => {
+                          setBitstreamAttempted(false);
+                          setBitstreamError(null);
+                          loadBitstream();
+                        }}
+                        className="mt-4 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white"
+                      >
+                        Retry
+                      </Button>
+                    </CardContent>
+                  </Card>
+                ) : bitstreamData ? (
+                  <>
+                    {/* Chunked file warning */}
+                    {bitstreamData.isChunked && (
+                      <Card className="bg-blue-500/20 backdrop-blur-lg border-blue-500/30">
+                        <CardContent className="p-4">
+                          <div className="flex items-start justify-between">
+                            <div className="flex-1">
+                              <p className="text-blue-400 font-semibold mb-1">Large File - Chunked Loading</p>
+                              <p className="text-gray-300 text-sm">
+                                This file is very large ({Math.round((bitstreamData.totalSize || 0) / 1024 / 1024 * 10) / 10}MB). 
+                                Only the first chunk is loaded. Use the controls below to navigate through the bitstream.
+                              </p>
+                              {bitstreamData.currentChunk && (
+                                <p className="text-gray-400 text-xs mt-2">
+                                  Current chunk: {bitstreamData.currentChunk.start} - {bitstreamData.currentChunk.end || 'end'} bytes
+                                </p>
+                              )}
+                            </div>
+                            <Button
+                              onClick={async () => {
+                                if (!bitstreamData.currentChunk) return;
+                                const chunkSize = (bitstreamData.currentChunk.end || 0) - bitstreamData.currentChunk.start;
+                                const nextStart = bitstreamData.currentChunk.end || 0;
+                                const nextEnd = Math.min(nextStart + chunkSize, bitstreamData.totalSize || Infinity);
+                                
+                                setLoadingBitstream(true);
+                                try {
+                                  const response = await fetch('/api/what-the-ffmpeg/bitstream', {
+                                    method: 'POST',
+                                    headers: { 'Content-Type': 'application/json' },
+                                    body: JSON.stringify({
+                                      fileId,
+                                      streamIndex: 0,
+                                      format: 'hex',
+                                      codecSpecific: false,
+                                      byteRange: { start: nextStart, end: nextEnd },
+                                    }),
+                                  });
+                                  
+                                  if (response.ok) {
+                                    const result = await response.json();
+                                    if (result.success && result.bitstream) {
+                                      // Append chunk to existing data
+                                      setBitstreamData({
+                                        ...bitstreamData,
+                                        bitstream: (bitstreamData.bitstream || '') + result.bitstream,
+                                        currentChunk: { start: nextStart, end: nextEnd },
+                                      });
+                                    }
+                                  }
+                                } catch (err) {
+                                  console.error('Failed to load chunk:', err);
+                                } finally {
+                                  setLoadingBitstream(false);
+                                }
+                              }}
+                              variant="outline"
+                              size="sm"
+                              className="text-white border-white/20 hover:bg-white/10"
+                              disabled={loadingBitstream || !bitstreamData.currentChunk || (bitstreamData.currentChunk.end || 0) >= (bitstreamData.totalSize || 0)}
+                            >
+                              Load Next Chunk
+                            </Button>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    )}
+                    
+                    <Tabs value={bitstreamTab} onValueChange={setBitstreamTab} className="space-y-6">
+                      <TabsList className="bg-white/10 border-white/20">
+                      <TabsTrigger value="hex" className="text-white data-[state=active]:bg-white/20">
+                        <FileCode className="h-4 w-4 mr-2" />
+                        Hex Dump
+                      </TabsTrigger>
+                      <TabsTrigger value="binary" className="text-white data-[state=active]:bg-white/20">
+                        <Binary className="h-4 w-4 mr-2" />
+                        Binary
+                      </TabsTrigger>
+                      {['h264', 'hevc', 'h265'].includes((videoStream.codec_name || '').toLowerCase()) && bitstreamData.nalUnits && (
+                        <>
+                          <TabsTrigger value="tree" className="text-white data-[state=active]:bg-white/20">
+                            <Network className="h-4 w-4 mr-2" />
+                            Structure Tree
+                          </TabsTrigger>
+                          <TabsTrigger value="parameters" className="text-white data-[state=active]:bg-white/20">
+                            <Code className="h-4 w-4 mr-2" />
+                            Parameter Sets
+                          </TabsTrigger>
+                          <TabsTrigger value="timeline" className="text-white data-[state=active]:bg-white/20">
+                            <Clock className="h-4 w-4 mr-2" />
+                            Timeline
+                          </TabsTrigger>
+                        </>
+                      )}
+                    </TabsList>
+
+                    <TabsContent value="hex">
+                      {bitstreamData.bitstream ? (
+                        <HexViewer
+                          hexData={bitstreamData.bitstream}
+                          nalUnits={bitstreamData.nalUnits}
+                          onOffsetClick={handleOffsetClick}
+                        />
+                      ) : (
+                        <Card className="bg-yellow-500/20 backdrop-blur-lg border-yellow-500/30">
+                          <CardContent className="p-6 text-center">
+                            <p className="text-yellow-400 font-semibold mb-2">Bitstream Too Large</p>
+                            <p className="text-gray-300 text-sm mb-4">
+                              {bitstreamData.message || 'This file is too large to load entirely. Use chunked loading to view specific ranges.'}
+                            </p>
+                            {bitstreamData.statistics?.totalSize && (
+                              <p className="text-gray-400 text-xs">
+                                Total size: {Math.round(bitstreamData.statistics.totalSize / 1024 / 1024 * 10) / 10}MB
+                              </p>
+                            )}
+                          </CardContent>
+                        </Card>
+                      )}
+                    </TabsContent>
+
+                    <TabsContent value="binary">
+                      {bitstreamData.bitstream ? (
+                        <BinaryVisualizer
+                          hexData={bitstreamData.bitstream}
+                          nalUnits={bitstreamData.nalUnits}
+                          onOffsetClick={handleOffsetClick}
+                        />
+                      ) : (
+                        <Card className="bg-yellow-500/20 backdrop-blur-lg border-yellow-500/30">
+                          <CardContent className="p-6 text-center">
+                            <p className="text-yellow-400 font-semibold mb-2">Bitstream Too Large</p>
+                            <p className="text-gray-300 text-sm mb-4">
+                              {bitstreamData.message || 'This file is too large to load entirely. Use chunked loading to view specific ranges.'}
+                            </p>
+                            {bitstreamData.statistics?.totalSize && (
+                              <p className="text-gray-400 text-xs">
+                                Total size: {Math.round(bitstreamData.statistics.totalSize / 1024 / 1024 * 10) / 10}MB
+                              </p>
+                            )}
+                          </CardContent>
+                        </Card>
+                      )}
+                    </TabsContent>
+
+                    {['h264', 'hevc', 'h265'].includes((videoStream.codec_name || '').toLowerCase()) && bitstreamData.nalUnits && (
+                      <>
+                        <TabsContent value="tree">
+                          <StructureTree
+                            nalUnits={bitstreamData.nalUnits}
+                            parameterSets={bitstreamData.parameterSets}
+                            onNALClick={handleOffsetClick}
+                          />
+                        </TabsContent>
+
+                        <TabsContent value="parameters">
+                          <ParameterSetViewer
+                            parameterSets={bitstreamData.parameterSets}
+                            codec={videoStream.codec_name?.toLowerCase() === 'h264' ? 'h264' : videoStream.codec_name?.toLowerCase() === 'h265' || videoStream.codec_name?.toLowerCase() === 'hevc' ? 'h265' : undefined}
+                            onOffsetClick={handleOffsetClick}
+                          />
+                        </TabsContent>
+
+                        <TabsContent value="timeline">
+                          <NALTimeline
+                            nalUnits={bitstreamData.nalUnits}
+                            onNALClick={handleOffsetClick}
+                          />
+                        </TabsContent>
+                      </>
+                      )}
+                    </Tabs>
+                  </>
+                ) : (
+                  <Card className="bg-white/10 backdrop-blur-lg border-white/20">
+                    <CardContent className="p-6 text-center">
+                      <p className="text-gray-300 mb-4">Bitstream data not loaded</p>
+                      <Button
+                        onClick={() => {
+                          setBitstreamAttempted(false);
+                          setBitstreamError(null);
+                          loadBitstream();
+                        }}
+                        className="bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white"
+                      >
+                        Load Bitstream
+                      </Button>
+                    </CardContent>
+                  </Card>
+                )}
+
+                {/* Statistics */}
+                {bitstreamData?.statistics && (
+                  <Card className="bg-white/10 backdrop-blur-lg border-white/20">
                     <CardHeader>
-                      <CardTitle className="text-white flex items-center gap-2">
-                        <Settings className="h-5 w-5" />
-                        Codec Parameters
-                      </CardTitle>
+                      <CardTitle className="text-white">Statistics</CardTitle>
                     </CardHeader>
                     <CardContent>
-                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                         <div>
-                          <p className="text-sm text-gray-400 mb-1">Codec</p>
-                          <p className="text-white font-mono">{videoStream.codec_name || 'Unknown'}</p>
+                          <p className="text-sm text-gray-400 mb-1">Total Size</p>
+                          <p className="text-white font-mono text-lg">
+                            {bitstreamData.statistics.totalSize.toLocaleString()} bytes
+                          </p>
                         </div>
-                        {videoStream.profile && (
+                        {bitstreamData.statistics.nalUnitCount > 0 && (
                           <div>
-                            <p className="text-sm text-gray-400 mb-1">Profile</p>
-                            <p className="text-white font-mono">{videoStream.profile}</p>
-                          </div>
-                        )}
-                        {videoStream.level && (
-                          <div>
-                            <p className="text-sm text-gray-400 mb-1">Level</p>
-                            <p className="text-white font-mono">{videoStream.level}</p>
-                          </div>
-                        )}
-                        {videoStream.pix_fmt && (
-                          <div>
-                            <p className="text-sm text-gray-400 mb-1">Pixel Format</p>
-                            <p className="text-white font-mono">{videoStream.pix_fmt}</p>
-                          </div>
-                        )}
-                        {videoStream.color_space && (
-                          <div>
-                            <p className="text-sm text-gray-400 mb-1">Color Space</p>
-                            <p className="text-white font-mono">{videoStream.color_space}</p>
-                          </div>
-                        )}
-                        {videoStream.bit_rate && (
-                          <div>
-                            <p className="text-sm text-gray-400 mb-1">Bitrate</p>
-                            <p className="text-white font-mono">
-                              {(parseInt(videoStream.bit_rate) / 1000).toFixed(0)} kbps
+                            <p className="text-sm text-gray-400 mb-1">NAL Units</p>
+                            <p className="text-white font-mono text-lg">
+                              {bitstreamData.statistics.nalUnitCount}
                             </p>
                           </div>
                         )}
+                        {bitstreamData.codec && (
+                          <div>
+                            <p className="text-sm text-gray-400 mb-1">Codec</p>
+                            <p className="text-white font-mono text-lg">
+                              {bitstreamData.codec.toUpperCase()}
+                            </p>
+                          </div>
+                        )}
+                        <div>
+                          <p className="text-sm text-gray-400 mb-1">Format</p>
+                          <p className="text-white font-mono text-lg">
+                            {bitstreamData.format.toUpperCase()}
+                          </p>
+                        </div>
                       </div>
                     </CardContent>
                   </Card>
