@@ -3,8 +3,26 @@ import path from 'path';
 import { promises as fs } from 'fs';
 import { createStorage } from './gcs-config';
 
-// Initialize Google Cloud Storage
-const storage = process.env.GCS_BUCKET_NAME ? createStorage() : null;
+// Initialize Google Cloud Storage lazily to avoid build-time errors
+let storage: Storage | null = null;
+function getStorage(): Storage | null {
+  if (!process.env.GCS_BUCKET_NAME) {
+    return null;
+  }
+  if (!storage) {
+    try {
+      storage = createStorage();
+    } catch (error) {
+      // During build, credentials might not be available - will fail at runtime if needed
+      if (process.env.NEXT_PHASE === 'phase-production-build') {
+        console.warn('GCS storage initialization skipped during build:', error instanceof Error ? error.message : error);
+        return null;
+      }
+      throw error;
+    }
+  }
+  return storage;
+}
 
 const bucketName = process.env.GCS_BUCKET_NAME || 'hls-demo-segments';
 
@@ -28,6 +46,7 @@ export async function uploadFile(options: UploadOptions): Promise<StorageFile> {
   const { localPath, remotePath, contentType, cacheControl } = options;
   
   // For local development without GCS, copy to public directory
+  const storage = getStorage();
   if (!storage) {
     // Ensure forward slashes for URL paths
     const urlPath = remotePath.replace(/\\/g, '/');
@@ -120,6 +139,7 @@ export async function uploadDirectory(
 
 // Delete files from storage
 export async function deleteFiles(remotePaths: string[]): Promise<void> {
+  const storage = getStorage();
   if (!storage) {
     // For local development, delete from public directory
     for (const remotePath of remotePaths) {
@@ -145,6 +165,7 @@ export async function getSignedUrl(
   remotePath: string,
   expiresInMinutes: number = 60
 ): Promise<string> {
+  const storage = getStorage();
   if (!storage) {
     // For local development, return public URL
     return `/streams/${remotePath}`;
@@ -164,7 +185,7 @@ return url;
 
 // Helper function to check if Google Cloud Storage is configured
 export function isGoogleCloudStorageConfigured(): boolean {
-  return !!storage && !!process.env.GCS_BUCKET_NAME;
+  return !!getStorage() && !!process.env.GCS_BUCKET_NAME;
 }
 
 // Helper function to get writable temp directory
@@ -176,11 +197,12 @@ export function getTempDir(): string {
 
 // Download file from GCS to local temp directory
 export async function downloadFromGCS(gcsPath: string): Promise<string> {
-  if (!isGoogleCloudStorageConfigured()) {
+  const storage = getStorage();
+  if (!storage) {
     throw new Error('Google Cloud Storage is not configured');
   }
 
-  const bucket = storage!.bucket(bucketName);
+  const bucket = storage.bucket(bucketName);
   
   // Use appropriate temp directory based on environment
   const tempDir = getTempDir();

@@ -87,6 +87,10 @@ export default function WhatTheFFMPEGPage() {
       const { uploadUrl, videoId: serverVideoId, filename } = await response.json();
       videoId = serverVideoId;
 
+      if (!videoId) {
+        throw new Error('Server did not return a video ID');
+      }
+
       // Update file info
       setFileInfo({
         id: videoId,
@@ -221,7 +225,7 @@ export default function WhatTheFFMPEGPage() {
         </div>
 
         {/* Upload Section */}
-        <Card className="bg-gradient-to-br from-yellow-600/20 to-orange-600/20 backdrop-blur-lg border-yellow-500/30 mb-6">
+        <Card className="bg-gradient-to-br from-yellow-600/25 to-orange-600/25 border-yellow-500/30 mb-6" style={{ isolation: 'isolate', contain: 'layout style paint' }}>
           <CardHeader>
             <CardTitle className="text-white flex items-center gap-2">
               <div className="p-2 bg-yellow-500/20 rounded-lg">
@@ -313,7 +317,7 @@ export default function WhatTheFFMPEGPage() {
         </Card>
 
         {/* Info Card */}
-        <Card className="bg-gradient-to-br from-yellow-600/20 to-orange-600/20 backdrop-blur-lg border-yellow-500/30">
+        <Card className="bg-gradient-to-br from-yellow-600/25 to-orange-600/25 border-yellow-500/30" style={{ isolation: 'isolate', contain: 'layout style paint' }}>
           <CardHeader>
             <CardTitle className="text-white flex items-center gap-2">
               <div className="p-2 bg-yellow-500/20 rounded-lg">

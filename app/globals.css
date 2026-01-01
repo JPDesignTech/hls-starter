@@ -118,6 +118,10 @@
   }
   body {
     @apply bg-background text-foreground;
+    /* Prevent text layout shifts during font loading */
+    text-rendering: optimizeLegibility;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
   }
 }
 
@@ -198,7 +202,7 @@
   opacity: 0.8;
 }
 
-/* Custom gradient animation */
+/* Custom gradient animation - optimized to reduce repaints */
 @keyframes gradient-shift {
   0% {
     background-position: 0% 50%;
@@ -215,6 +219,25 @@
 .animate-gradient {
   background-size: 200% 200%;
   animation: gradient-shift 15s ease infinite;
+  will-change: background-position;
+  transform: translateZ(0);
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+  /* Isolate this layer to prevent repaints of children */
+  isolation: isolate;
+  contain: layout style paint;
+  /* Force GPU acceleration */
+  -webkit-transform: translateZ(0);
+  -moz-transform: translateZ(0);
+  -ms-transform: translateZ(0);
+  -o-transform: translateZ(0);
+}
+
+/* Respect reduced motion preference */
+@media (prefers-reduced-motion: reduce) {
+  .animate-gradient {
+    animation: none;
+  }
 }
 
 /* Custom scrollbar for dark theme */
@@ -249,4 +272,22 @@ html,
 body {
   height: 100%;
   overflow-x: hidden;
+}
+
+/* CSS containment for performance optimization */
+.content-container {
+  isolation: isolate;
+  contain: layout style paint;
+}
+
+.main-content {
+  isolation: isolate;
+  contain: layout style paint;
+}
+
+/* Disable backdrop-filter globally to prevent repaints */
+/* This fixes all 102+ instances across the application */
+* {
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
 }

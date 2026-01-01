@@ -112,6 +112,13 @@ export default function FileAnalysisPage() {
   const [selectedOffset, setSelectedOffset] = React.useState<number | null>(null);
   const [bitstreamAttempted, setBitstreamAttempted] = React.useState(false);
 
+  // Helper to safely convert time values to numbers
+  const toNumber = (value: any): number | undefined => {
+    if (value === undefined || value === null) return undefined;
+    const num = typeof value === 'string' ? parseFloat(value) : Number(value);
+    return isNaN(num) ? undefined : num;
+  };
+
   // Compute derived values
   const currentFrame = framesData[currentFrameIndex];
   const videoStream = probeData?.streams?.find((s: any) => s.codec_type === 'video');
@@ -314,7 +321,7 @@ export default function FileAnalysisPage() {
         body: JSON.stringify({
           fileId,
           frameNumber: currentFrameIndex,
-          time: currentFrame.pkt_pts_time || currentFrame.pts_time,
+          time: toNumber(currentFrame.pkt_pts_time) ?? toNumber(currentFrame.pts_time) ?? undefined,
           // Don't pass streamIndex - backend will always use first video stream
         }),
       });
@@ -1169,7 +1176,7 @@ export default function FileAnalysisPage() {
                         <div className="relative h-20 min-w-full" style={{ width: `${Math.max(framesData.length * 4, 100)}px` }}>
                           {framesData.map((frame: any, idx: number) => {
                             const duration = parseFloat(probeData?.format?.duration || '0');
-                            const frameTime = parseFloat(frame.pkt_pts_time || frame.pts_time || '0');
+                            const frameTime = toNumber(frame.pkt_pts_time) ?? toNumber(frame.pts_time) ?? 0;
                             const isSelected = idx === currentFrameIndex;
                             
                             return (
@@ -1352,7 +1359,7 @@ export default function FileAnalysisPage() {
                         </div>
                         {framePreviewUrl && (
                           <p className="text-xs text-gray-500 mt-2 text-center">
-                            Frame at {currentFrame.pkt_pts_time !== undefined ? parseFloat(currentFrame.pkt_pts_time).toFixed(3) : 'N/A'}s
+                            Frame at {toNumber(currentFrame.pkt_pts_time) !== undefined ? toNumber(currentFrame.pkt_pts_time)!.toFixed(3) : 'N/A'}s
                           </p>
                         )}
                       </div>
@@ -1369,9 +1376,9 @@ export default function FileAnalysisPage() {
                         <div>
                           <p className="text-sm text-gray-400 mb-1">PTS</p>
                           <p className="text-white font-mono">{currentFrame.pkt_pts || 'N/A'}</p>
-                          {currentFrame.pkt_pts_time !== undefined && (
+                          {toNumber(currentFrame.pkt_pts_time) !== undefined && (
                             <p className="text-xs text-gray-500 mt-1">
-                              {parseFloat(currentFrame.pkt_pts_time).toFixed(3)}s
+                              {toNumber(currentFrame.pkt_pts_time)!.toFixed(3)}s
                             </p>
                           )}
                         </div>
@@ -1379,9 +1386,9 @@ export default function FileAnalysisPage() {
                           <div>
                             <p className="text-sm text-gray-400 mb-1">DTS</p>
                             <p className="text-white font-mono">{currentFrame.pkt_dts}</p>
-                            {currentFrame.pkt_dts_time !== undefined && (
+                            {toNumber(currentFrame.pkt_dts_time) !== undefined && (
                               <p className="text-xs text-gray-500 mt-1">
-                                {parseFloat(currentFrame.pkt_dts_time).toFixed(3)}s
+                                {toNumber(currentFrame.pkt_dts_time)!.toFixed(3)}s
                               </p>
                             )}
                           </div>
@@ -1390,11 +1397,11 @@ export default function FileAnalysisPage() {
                           <p className="text-sm text-gray-400 mb-1">Packet Size</p>
                           <p className="text-white font-mono">{currentFrame.pkt_size || 'N/A'} bytes</p>
                         </div>
-                        {currentFrame.pkt_duration_time !== undefined && (
+                        {toNumber(currentFrame.pkt_duration_time) !== undefined && (
                           <div>
                             <p className="text-sm text-gray-400 mb-1">Duration</p>
                             <p className="text-white font-mono">
-                              {parseFloat(currentFrame.pkt_duration_time).toFixed(3)}s
+                              {toNumber(currentFrame.pkt_duration_time)!.toFixed(3)}s
                             </p>
                           </div>
                         )}
@@ -1577,8 +1584,8 @@ export default function FileAnalysisPage() {
                                 if (keyframes.length < 2) return 'N/A';
                                 const intervals = [];
                                 for (let i = 1; i < keyframes.length; i++) {
-                                  const prev = parseFloat(keyframes[i-1].pkt_pts_time || '0');
-                                  const curr = parseFloat(keyframes[i].pkt_pts_time || '0');
+                                  const prev = toNumber(keyframes[i-1].pkt_pts_time) || 0;
+                                  const curr = toNumber(keyframes[i].pkt_pts_time) || 0;
                                   intervals.push(curr - prev);
                                 }
                                 const avg = intervals.reduce((a, b) => a + b, 0) / intervals.length;
@@ -1614,8 +1621,8 @@ export default function FileAnalysisPage() {
                         </CardHeader>
                         <CardContent>
                           <div className="space-y-4">
-                            {probeData.streams.filter((s: any) => s.codec_type === 'video').map((videoStream: any, idx: number) => {
-                              const audioStreams = probeData.streams.filter((s: any) => s.codec_type === 'audio');
+                            {probeData.streams?.filter((s: any) => s.codec_type === 'video').map((videoStream: any, idx: number) => {
+                              const audioStreams = probeData.streams?.filter((s: any) => s.codec_type === 'audio') || [];
                               return audioStreams.map((audioStream: any, audioIdx: number) => {
                                 const videoStart = videoStream.start_time ? parseFloat(videoStream.start_time) : 0;
                                 const audioStart = audioStream.start_time ? parseFloat(audioStream.start_time) : 0;
@@ -1688,7 +1695,7 @@ export default function FileAnalysisPage() {
                                 <p className="text-xs text-gray-400 mb-1">Avg Frame Size</p>
                                 <p className="text-white font-mono text-lg">
                                   {formatBytes(Math.round(
-                                    framesData.reduce((sum, f) => sum + (parseInt(f.pkt_size || '0')), 0) / framesData.length
+                                    framesData.reduce((sum, f) => sum + (f.pkt_size || 0), 0) / framesData.length
                                   ))}
                                 </p>
                               </div>

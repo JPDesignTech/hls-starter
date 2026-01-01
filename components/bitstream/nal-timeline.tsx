@@ -76,7 +76,7 @@ export function NALTimeline({ nalUnits, onNALClick }: NALTimelineProps) {
   const [viewMode, setViewMode] = React.useState<'grouped' | 'sequential'>('grouped');
 
   return (
-    <Card className="bg-white/10 backdrop-blur-lg border-white/20">
+    <Card className="bg-white/15 border-white/20" style={{ isolation: 'isolate', contain: 'layout style paint' }}>
       <CardHeader>
         <div className="flex items-center justify-between">
           <CardTitle className="text-white flex items-center gap-2">
@@ -265,5 +265,11 @@ export function NALTimeline({ nalUnits, onNALClick }: NALTimelineProps) {
     </Card>
   );
 }
+
+
+
+
+
+
 
 

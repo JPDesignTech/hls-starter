@@ -104,7 +104,7 @@ const hlsTips: HlsTip[] = [
   }
 ];
 
-export default function HlsSpecTips() {
+function HlsSpecTips() {
   const [currentTipIndex, setCurrentTipIndex] = useState(0);
   const [isVisible, setIsVisible] = useState(true);
   const [isPaused, setIsPaused] = useState(false);
@@ -115,12 +115,17 @@ export default function HlsSpecTips() {
     
     intervalRef.current = setInterval(() => {
       if (!isPaused) {
-        setIsVisible(false);
-        
-        setTimeout(() => {
-          setCurrentTipIndex((prevIndex) => (prevIndex + 1) % hlsTips.length);
-          setIsVisible(true);
-        }, 300);
+        // Use startTransition for non-urgent updates
+        React.startTransition(() => {
+          setIsVisible(false);
+          
+          setTimeout(() => {
+            React.startTransition(() => {
+              setCurrentTipIndex((prevIndex) => (prevIndex + 1) % hlsTips.length);
+              setIsVisible(true);
+            });
+          }, 300);
+        });
       }
     }, 6000); // Change tip every 6 seconds
   };
@@ -133,12 +138,16 @@ export default function HlsSpecTips() {
   }, [isPaused]);
 
   const goToTip = (index: number) => {
-    setIsVisible(false);
-    setTimeout(() => {
-      setCurrentTipIndex(index);
-      setIsVisible(true);
-      startRotation(); // Reset the timer
-    }, 300);
+    React.startTransition(() => {
+      setIsVisible(false);
+      setTimeout(() => {
+        React.startTransition(() => {
+          setCurrentTipIndex(index);
+          setIsVisible(true);
+          startRotation(); // Reset the timer
+        });
+      }, 300);
+    });
   };
 
   const goToPrevious = () => {
@@ -158,17 +167,18 @@ export default function HlsSpecTips() {
   const currentTip = hlsTips[currentTipIndex];
 
   return (
-    <div className="my-4 relative">
+    <div className="my-4 relative min-h-[100px]">
       <div 
-        className={`bg-gradient-to-r from-purple-900/20 via-blue-900/20 to-purple-900/20 backdrop-blur-sm rounded-lg px-4 py-3 border border-purple-500/20 transition-all duration-300 ${
-          isVisible ? 'opacity-100 transform translate-y-0' : 'opacity-0 transform -translate-y-2'
+        className={`bg-gradient-to-r from-purple-900/30 via-blue-900/30 to-purple-900/30 rounded-lg px-4 py-3 border border-purple-500/20 transition-opacity duration-300 will-change-[opacity] ${
+          isVisible ? 'opacity-100' : 'opacity-0 pointer-events-none'
         }`}
+        style={{ isolation: 'isolate', contain: 'layout style paint' }}
       >
         <div className="flex items-start gap-3">
           <div className="flex-shrink-0 mt-0.5">
             <div className="relative">
               <BookOpen className="h-4 w-4 text-purple-400" />
-              <div className="absolute inset-0 h-4 w-4 bg-purple-400 rounded-full animate-ping opacity-30" />
+              <div className="absolute inset-0 h-4 w-4 bg-purple-400 rounded-full opacity-20" />
             </div>
           </div>
           <div className="flex-1 min-w-0">
@@ -249,9 +259,9 @@ export default function HlsSpecTips() {
       </div>
       
       {/* Quick tip label */}
-      <div className="absolute -top-2 left-4 bg-gradient-to-r from-gray-900 to-gray-800 px-3 py-0.5 rounded-full shadow-lg">
+      <div className="absolute -top-2 left-4 bg-gradient-to-r from-gray-900 to-gray-800 px-3 py-0.5 rounded-full shadow-lg z-10">
         <span className="text-xs text-purple-400 font-medium flex items-center gap-1">
-          <Info className="h-3 w-3 animate-pulse" />
+          <Info className="h-3 w-3" />
           HLS Spec Quick Reference
           <span className="text-purple-300 ml-1">
             ({currentTipIndex + 1}/{hlsTips.length})
@@ -271,4 +281,7 @@ export default function HlsSpecTips() {
       `}</style>
     </div>
   );
-} 
+}
+
+// Memoize to prevent unnecessary re-renders
+export default React.memo(HlsSpecTips); 

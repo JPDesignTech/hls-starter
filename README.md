@@ -265,11 +265,12 @@ graph LR
    # Google Cloud Platform
    GCP_PROJECT_ID=your-project-id
    GCS_BUCKET_NAME=your-bucket-name
-   GCS_CLIENT_EMAIL=your-service-account@project.iam.gserviceaccount.com
-   GCS_PRIVATE_KEY="-----BEGIN PRIVATE KEY-----\n...\n-----END PRIVATE KEY-----"
    
-   # Or use a service account key file
-   GOOGLE_APPLICATION_CREDENTIALS=path/to/service-account-key.json
+   # GCS Credentials - ONE method for ALL environments (local, preview, production)
+   # Set GCP_SERVICE_ACCOUNT_KEY with BASE64-ENCODED JSON of your service account key
+   # Encode with: base64 -i key.json
+   # Get your service account key from: https://console.cloud.google.com/iam-admin/serviceaccounts
+   GCP_SERVICE_ACCOUNT_KEY=eyJ0eXBlIjoic2VydmljZV9hY2NvdW50Ii...
    
    # Cloud Run FFprobe Service URL
    FFPROBE_SERVICE_URL=https://your-ffprobe-service-url.run.app

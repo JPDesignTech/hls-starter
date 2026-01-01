@@ -11,39 +11,28 @@ function getTranscoderClient() {
       config.projectId = process.env.GCP_PROJECT_ID;
     }
 
-    // For production (Vercel) - when GCP_SERVICE_ACCOUNT_KEY env var is set
+    // SINGLE METHOD: GCP_SERVICE_ACCOUNT_KEY must be base64-encoded JSON
+    // Works in ALL environments: local dev, preview, production
     if (process.env.GCP_SERVICE_ACCOUNT_KEY && process.env.GCP_SERVICE_ACCOUNT_KEY.trim() !== '') {
       try {
-        // Only try to parse if it looks like JSON (starts with {)
-        if (process.env.GCP_SERVICE_ACCOUNT_KEY.trim().startsWith('{')) {
-          config.credentials = JSON.parse(process.env.GCP_SERVICE_ACCOUNT_KEY);
-          console.log('[Transcoder] Using credentials from GCP_SERVICE_ACCOUNT_KEY');
-        }
+        const base64Content = process.env.GCP_SERVICE_ACCOUNT_KEY.trim();
+        // Decode from base64
+        const jsonString = Buffer.from(base64Content, 'base64').toString('utf-8');
+        // Parse the decoded JSON
+        config.credentials = JSON.parse(jsonString);
+        console.log('[Transcoder] Using credentials from GCP_SERVICE_ACCOUNT_KEY (base64 decoded)');
       } catch (error) {
-        console.error('[Transcoder] Failed to parse GCP_SERVICE_ACCOUNT_KEY:', error);
+        console.error('[Transcoder] Failed to decode/parse GCP_SERVICE_ACCOUNT_KEY:', error);
+        throw new Error(
+          'GCP_SERVICE_ACCOUNT_KEY must be base64-encoded JSON. ' +
+          'Encode your service account key with: base64 -i key.json\n' +
+          'Get your key from: https://console.cloud.google.com/iam-admin/serviceaccounts'
+        );
       }
-    } else if (process.env.GCS_PRIVATE_KEY && process.env.GCS_CLIENT_EMAIL && process.env.GCP_PROJECT_ID) {
-      // Fallback to individual credential fields
-      config.credentials = {
-        type: 'service_account',
-        project_id: process.env.GCP_PROJECT_ID,
-        private_key_id: 'key-id',
-        private_key: process.env.GCS_PRIVATE_KEY.replace(/\\n/g, '\n'),
-        client_email: process.env.GCS_CLIENT_EMAIL,
-        client_id: 'client-id',
-        auth_uri: 'https://accounts.google.com/o/oauth2/auth',
-        token_uri: 'https://oauth2.googleapis.com/token',
-        auth_provider_x509_cert_url: 'https://www.googleapis.com/oauth2/v1/certs',
-        client_x509_cert_url: `https://www.googleapis.com/robot/v1/metadata/x509/${encodeURIComponent(process.env.GCS_CLIENT_EMAIL)}`,
-      };
-      console.log('[Transcoder] Using credentials from individual env vars');
-    } else if (process.env.GOOGLE_APPLICATION_CREDENTIALS) {
-      config.keyFilename = process.env.GOOGLE_APPLICATION_CREDENTIALS;
-      console.log('[Transcoder] Using credentials from file:', process.env.GOOGLE_APPLICATION_CREDENTIALS);
     }
 
     console.log('[Transcoder] Initializing client with project:', config.projectId);
-    console.log('[Transcoder] Has credentials:', !!config.credentials || !!config.keyFilename);
+    console.log('[Transcoder] Has credentials:', !!config.credentials);
     
     return new TranscoderServiceClient(config);
   } catch (error) {

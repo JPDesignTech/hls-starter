@@ -28,7 +28,7 @@ export function HexViewer({ hexData, nalUnits = [], onOffsetClick }: HexViewerPr
   // Handle null/empty hexData
   if (!hexData || hexData.length === 0) {
     return (
-      <Card className="bg-white/10 backdrop-blur-lg border-white/20">
+      <Card className="bg-white/15 border-white/20" style={{ isolation: 'isolate', contain: 'layout style paint' }}>
         <CardContent className="p-6 text-center">
           <p className="text-gray-300">No bitstream data available</p>
         </CardContent>
@@ -211,7 +211,7 @@ export function HexViewer({ hexData, nalUnits = [], onOffsetClick }: HexViewerPr
   }, [visibleRange, totalLines]);
 
   return (
-    <Card className="bg-white/10 backdrop-blur-lg border-white/20">
+    <Card className="bg-white/15 border-white/20" style={{ isolation: 'isolate', contain: 'layout style paint' }}>
       <CardHeader>
         <div className="flex items-center justify-between">
           <CardTitle className="text-white">
