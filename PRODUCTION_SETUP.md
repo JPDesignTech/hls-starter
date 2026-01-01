@@ -33,11 +33,14 @@ NODE_ENV=production         # Auto-set by Vercel
 # Required: FFprobe Service URL (Cloud Run)
 FFPROBE_SERVICE_URL=https://your-ffprobe-service.run.app
 
-# Google Cloud Storage (Recommended)
+# Google Cloud Storage (Required)
 GCS_BUCKET_NAME=your-bucket-name
-GCS_PROJECT_ID=your-project-id
-GCS_CLIENT_EMAIL=your-service-account@project.iam.gserviceaccount.com
-GCS_PRIVATE_KEY="-----BEGIN PRIVATE KEY-----\n...\n-----END PRIVATE KEY-----\n"
+GCP_PROJECT_ID=your-project-id
+GCP_SERVICE_ACCOUNT_KEY=eyJ0eXBlIjoic2VydmljZV9hY2NvdW50Ii...
+# ^ Set this to BASE64-ENCODED JSON of your service account key file
+# Encode with: base64 -i key.json
+# This works in ALL environments: local dev, preview, production
+# Get your key from: https://console.cloud.google.com/iam-admin/serviceaccounts
 
 # Redis/Upstash (Required)
 REDIS_URL=your-redis-url
@@ -62,8 +65,37 @@ gsutil mb gs://your-hls-bucket
 gsutil iam ch allUsers:objectViewer gs://your-hls-bucket
 ```
 
-3. Create a service account and download the JSON key
-4. Add the service account credentials to Vercel environment variables
+3. Create a service account 
+4. Download the JSON key file for the service account
+5. **Set `GCP_SERVICE_ACCOUNT_KEY` environment variable** with **base64-encoded JSON**:
+   - Encode your key file: `base64 -i key.json`
+   - Copy the base64 output
+   - **Local dev**: Add to `.env.local` as `GCP_SERVICE_ACCOUNT_KEY=eyJ0eXBlIjo...`
+   - **Vercel (preview/production)**: Add to Vercel environment variables as `GCP_SERVICE_ACCOUNT_KEY` with the base64 string
+   - This is the ONLY credential method - works in ALL environments
+
+6. **Configure CORS for direct uploads**:
+   The GCS bucket must be configured with CORS to allow direct browser uploads from your Vercel deployments.
+   
+   Run the CORS configuration script:
+   ```bash
+   # Set environment variables
+   export GCS_BUCKET_NAME=your-bucket-name
+   export GCP_PROJECT_ID=your-project-id
+   
+   # Optionally set your production domain (will be auto-detected from VERCEL_URL)
+   export NEXT_PUBLIC_APP_URL=https://your-domain.vercel.app
+   
+   # Run the CORS configuration script
+   ./scripts/configure-gcs-cors.sh
+   ```
+   
+   This script automatically configures CORS to allow uploads from:
+   - `http://localhost:3000` and `http://localhost:*` (for local development)
+   - `https://*.vercel.app` (for all Vercel preview branches)
+   - Your custom production domain (if `NEXT_PUBLIC_APP_URL` or `VERCEL_URL` is set)
+   
+   **Important**: Run this script after deploying to ensure uploads work from preview branches and production.
 
 ### 2. Set Up Redis (Upstash)
 
@@ -178,6 +210,11 @@ npm start
 
 ### Issue: "Function timeout"
 **Solution**: Offload processing to external service with webhooks
+
+### Issue: "Upload failed" or CORS errors when uploading from Vercel
+**Solution**: Configure CORS on your GCS bucket by running `./scripts/configure-gcs-cors.sh`. 
+   The script automatically includes Vercel preview branch domains (`*.vercel.app`) and your production domain.
+   Make sure to run this script after deploying to a new environment.
 
 ## Next Steps
 

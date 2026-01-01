@@ -75,40 +75,63 @@ export default function HomePage() {
     const checkVideoStatus = async () => {
       const processingVideos = videos.filter(v => v.status === 'processing');
       
+      if (processingVideos.length === 0) return;
+      
       for (const video of processingVideos) {
         try {
           const response = await fetch(`/api/video/${video.id}/status`);
           if (response.ok) {
             const data = await response.json();
-            if (data.status === 'ready') {
-              setVideos(prev => prev.map(v => 
-                v.id === video.id 
-                  ? { ...v, status: 'ready', url: data.url, progress: 100 } 
-                  : v
-              ));
-            } else if (data.status === 'processing') {
-              // Update progress during processing
-              let newProgress = data.progress || video.progress || 50;
-              
-              // If we're stuck at 50% and have a processingState, increment slowly
-              if (newProgress === 50 && data.processingState === 'RUNNING' && video.progress >= 50) {
-                // Increment by 10% every 10 seconds (1% per second), up to 85%
-                newProgress = Math.min(85, video.progress + 10);
+            
+            // Use startTransition for non-urgent updates to prevent blocking
+            React.startTransition(() => {
+              if (data.status === 'ready') {
+                setVideos(prev => {
+                  const currentVideo = prev.find(v => v.id === video.id);
+                  // Only update if status actually changed
+                  if (currentVideo?.status !== 'ready' || currentVideo?.url !== data.url) {
+                    return prev.map(v => 
+                      v.id === video.id 
+                        ? { ...v, status: 'ready', url: data.url, progress: 100 } 
+                        : v
+                    );
+                  }
+                  return prev;
+                });
+              } else if (data.status === 'processing') {
+                // Update progress during processing
+                let newProgress = data.progress || video.progress || 50;
+                
+                // If we're stuck at 50% and have a processingState, increment slowly
+                if (newProgress === 50 && data.processingState === 'RUNNING' && video.progress >= 50) {
+                  // Increment by 10% every 10 seconds (1% per second), up to 85%
+                  newProgress = Math.min(85, video.progress + 10);
+                }
+                
+                // Only update if progress actually changed
+                if (newProgress !== video.progress) {
+                  console.log(`Updating video ${video.id} progress from ${video.progress}% to ${newProgress}%`);
+                  setVideos(prev => prev.map(v => 
+                    v.id === video.id 
+                      ? { ...v, progress: newProgress } 
+                      : v
+                  ));
+                }
+              } else if (data.status === 'error') {
+                setVideos(prev => {
+                  const currentVideo = prev.find(v => v.id === video.id);
+                  // Only update if status actually changed
+                  if (currentVideo?.status !== 'error') {
+                    return prev.map(v => 
+                      v.id === video.id 
+                        ? { ...v, status: 'error', error: data.error || 'Processing failed' } 
+                        : v
+                    );
+                  }
+                  return prev;
+                });
               }
-              
-              console.log(`Updating video ${video.id} progress from ${video.progress}% to ${newProgress}%`);
-              setVideos(prev => prev.map(v => 
-                v.id === video.id 
-                  ? { ...v, progress: newProgress } 
-                  : v
-              ));
-            } else if (data.status === 'error') {
-              setVideos(prev => prev.map(v => 
-                v.id === video.id 
-                  ? { ...v, status: 'error', error: data.error || 'Processing failed' } 
-                  : v
-              ));
-            }
+            });
           }
         } catch (error) {
           console.error('Error checking video status:', error);
@@ -117,7 +140,8 @@ export default function HomePage() {
     };
 
     // Only run if there are videos being processed
-    if (videos.some(v => v.status === 'processing')) {
+    const hasProcessingVideos = videos.some(v => v.status === 'processing');
+    if (hasProcessingVideos) {
       checkVideoStatus();
       const interval = setInterval(checkVideoStatus, 10000); // Check every 10 seconds
       return () => clearInterval(interval);
@@ -307,8 +331,8 @@ export default function HomePage() {
   ];
 
   return (
-    <div className="min-h-screen">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
+    <div className="min-h-screen content-container">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12 content-container">
         {/* Header */}
         <div className="text-center mb-12">
           <div className="inline-flex items-center justify-center space-x-2 mb-4">
@@ -334,11 +358,12 @@ export default function HomePage() {
             return (
               <Card
                 key={method.id}
-                className={`cursor-pointer transition-all ${
+                className={`cursor-pointer transition-all min-h-[180px] ${
                   selectedMethod === method.id
-                    ? 'bg-purple-600/20 border-purple-500 backdrop-blur-lg'
-                    : 'bg-white/10 border-white/20 hover:bg-white/20 backdrop-blur-lg'
+                    ? 'bg-purple-600/25 border-purple-500'
+                    : 'bg-white/15 border-white/20 hover:bg-white/25'
                 }`}
+                style={{ isolation: 'isolate', contain: 'layout style paint' }}
                 onClick={() => setSelectedMethod(method.id)}
               >
                 <CardHeader className="text-center">
@@ -356,7 +381,7 @@ export default function HomePage() {
         </div>
 
         {/* Upload Section */}
-        <Card className="mb-8 bg-white/10 backdrop-blur-lg border-white/20">
+        <Card className="mb-8 bg-white/15 border-white/20 min-h-[300px]" style={{ isolation: 'isolate', contain: 'layout style paint' }}>
           <CardHeader>
             <CardTitle className="text-white">
               {selectedMethod === 'hls' ? 'Analyze HLS Playlist' : 'Upload Video'}
@@ -614,7 +639,7 @@ export default function HomePage() {
         
         <div className="space-y-6">
           {videos.map(video => (
-            <Card key={video.id} className="bg-white/10 backdrop-blur-lg border-white/20">
+            <Card key={video.id} className="bg-white/15 border-white/20" style={{ isolation: 'isolate', contain: 'layout style paint' }}>
               <CardHeader>
                 <div className="flex items-center justify-between">
                   <div className="flex items-center space-x-3">
@@ -708,7 +733,7 @@ export default function HomePage() {
         </div>
 
         {/* What the FFMPEG Feature Card */}
-        <Card className="mt-8 bg-gradient-to-br from-yellow-600/20 to-orange-600/20 backdrop-blur-lg border-yellow-500/30">
+        <Card className="mt-8 bg-gradient-to-br from-yellow-600/25 to-orange-600/25 border-yellow-500/30" style={{ isolation: 'isolate', contain: 'layout style paint' }}>
           <CardHeader>
             <CardTitle className="text-white flex items-center gap-2">
               <div className="p-2 bg-yellow-500/20 rounded-lg">
@@ -736,7 +761,7 @@ export default function HomePage() {
         </Card>
 
         {/* Corruption Checker Feature Card */}
-        <Card className="mt-8 bg-gradient-to-br from-green-600/20 to-emerald-600/20 backdrop-blur-lg border-green-500/30">
+        <Card className="mt-8 bg-gradient-to-br from-green-600/25 to-emerald-600/25 border-green-500/30" style={{ isolation: 'isolate', contain: 'layout style paint' }}>
           <CardHeader>
             <CardTitle className="text-white flex items-center gap-2">
               <div className="p-2 bg-green-500/20 rounded-lg">
@@ -765,7 +790,7 @@ export default function HomePage() {
 
         {/* Empty State */}
         {videos.length === 0 && (
-          <Card className="mt-8 bg-white/10 backdrop-blur-lg border-white/20">
+          <Card className="mt-8 bg-white/15 border-white/20" style={{ isolation: 'isolate', contain: 'layout style paint' }}>
             <CardContent className="pt-6">
               <div className="text-center py-12">
                 <Video className="mx-auto h-12 w-12 text-purple-400 mb-4" />

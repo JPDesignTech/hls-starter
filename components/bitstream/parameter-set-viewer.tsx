@@ -40,7 +40,7 @@ function ParameterSetCard({
   }
 
   return (
-    <Card className={`${color} backdrop-blur-lg border-white/20 mb-4`}>
+    <Card className={`${color} border-white/20 mb-4`} style={{ isolation: 'isolate', contain: 'layout style paint' }}>
       <CardHeader>
         <div
           className="flex items-center justify-between cursor-pointer"
@@ -125,7 +125,7 @@ function ParameterSetCard({
 export function ParameterSetViewer({ parameterSets, codec, onOffsetClick }: ParameterSetViewerProps) {
   if (!parameterSets || (!parameterSets.sps?.length && !parameterSets.pps?.length && !parameterSets.vps?.length)) {
     return (
-      <Card className="bg-white/10 backdrop-blur-lg border-white/20">
+      <Card className="bg-white/15 border-white/20" style={{ isolation: 'isolate', contain: 'layout style paint' }}>
         <CardHeader>
           <CardTitle className="text-white flex items-center gap-2">
             <Settings className="h-5 w-5" />
@@ -170,7 +170,7 @@ export function ParameterSetViewer({ parameterSets, codec, onOffsetClick }: Para
       
       {/* Codec Info */}
       {codec && (
-        <Card className="bg-white/10 backdrop-blur-lg border-white/20">
+        <Card className="bg-white/15 border-white/20" style={{ isolation: 'isolate', contain: 'layout style paint' }}>
           <CardContent className="pt-6">
             <div className="text-sm text-gray-300">
               <p className="mb-2">
@@ -198,5 +198,11 @@ export function ParameterSetViewer({ parameterSets, codec, onOffsetClick }: Para
     </div>
   );
 }
+
+
+
+
+
+
 
 

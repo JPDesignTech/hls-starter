@@ -114,7 +114,7 @@ export function StructureTree({ nalUnits, parameterSets, onNALClick }: Structure
   };
 
   return (
-    <Card className="bg-white/10 backdrop-blur-lg border-white/20">
+    <Card className="bg-white/15 border-white/20" style={{ isolation: 'isolate', contain: 'layout style paint' }}>
       <CardHeader>
         <CardTitle className="text-white">Bitstream Structure Tree</CardTitle>
       </CardHeader>
@@ -254,5 +254,11 @@ export function StructureTree({ nalUnits, parameterSets, onNALClick }: Structure
     </Card>
   );
 }
+
+
+
+
+
+
 
 
