@@ -707,6 +707,34 @@ export default function HomePage() {
           ))}
         </div>
 
+        {/* What the FFMPEG Feature Card */}
+        <Card className="mt-8 bg-gradient-to-br from-yellow-600/20 to-orange-600/20 backdrop-blur-lg border-yellow-500/30">
+          <CardHeader>
+            <CardTitle className="text-white flex items-center gap-2">
+              <div className="p-2 bg-yellow-500/20 rounded-lg">
+                <Zap className="h-6 w-6 text-yellow-400" />
+              </div>
+              What the FFMPEG
+            </CardTitle>
+            <CardDescription className="text-gray-300">
+              Extremely detailed media file analysis with FFProbe, FFPlay, and FFMPEG
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <p className="text-sm text-gray-300 mb-4">
+              Upload any media file (video, audio, or image) to get comprehensive analysis including 
+              stream information, frame-level data, packet inspection, bitstream visualization, and 
+              codec-specific details. Perfect for deep media file inspection and debugging.
+            </p>
+            <Link href="/what-the-ffmpeg">
+              <Button className="w-full bg-gradient-to-r from-yellow-600 to-orange-600 hover:from-yellow-700 hover:to-orange-700 text-white">
+                <Zap className="mr-2 h-4 w-4" />
+                Open What the FFMPEG
+              </Button>
+            </Link>
+          </CardContent>
+        </Card>
+
         {/* Corruption Checker Feature Card */}
         <Card className="mt-8 bg-gradient-to-br from-green-600/20 to-emerald-600/20 backdrop-blur-lg border-green-500/30">
           <CardHeader>

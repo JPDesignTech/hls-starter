@@ -28,7 +28,11 @@ gcloud auth configure-docker ${REGION}-docker.pkg.dev
 
 # Build and push the image using Cloud Build to Artifact Registry
 echo "🏗️ Building Docker image with Cloud Build..."
-gcloud builds submit --tag ${REGION}-docker.pkg.dev/$PROJECT_ID/$AR_REPO/$SERVICE_NAME .
+# Cloud Build will automatically detect Dockerfile in the current directory
+if ! gcloud builds submit --tag ${REGION}-docker.pkg.dev/$PROJECT_ID/$AR_REPO/$SERVICE_NAME:latest .; then
+  echo "❌ Build failed! Aborting deployment."
+  exit 1
+fi
 
 # Deploy to Cloud Run
 echo "☁️ Deploying to Cloud Run..."
