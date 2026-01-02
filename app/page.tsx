@@ -3,331 +3,79 @@
 import * as React from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Progress } from '@/components/ui/progress';
-import { VideoPlayer } from '@/components/video-player';
-import { DirectUpload } from '@/components/direct-upload';
-import { ChunkedUpload } from '@/components/chunked-upload';
-import { Upload, Video, Loader2, CheckCircle2, AlertCircle, Zap, CloudUpload, Package, Server, BarChart3, Link as LinkIcon, Trash2, X, ShieldCheck } from 'lucide-react';
+import { Zap, Video, ShieldCheck, Terminal, LucideIcon } from 'lucide-react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
-import HlsSpecTips from '@/components/hls-spec-tips';
+import ModuleSpecTips from '@/components/module-spec-tips';
 
-interface VideoInfo {
+interface FeatureModule {
   id: string;
   title: string;
-  status: 'uploading' | 'processing' | 'ready' | 'error';
-  progress: number;
-  url?: string;
-  error?: string;
+  description: string;
+  longDescription: string;
+  icon: LucideIcon;
+  href: string;
+  gradient: string;
+  borderColor: string;
+  iconBg: string;
+  iconColor: string;
+  buttonGradient: string;
 }
 
-type UploadMethod = 'direct' | 'chunked' | 'traditional' | 'hls';
-
 export default function HomePage() {
-  const router = useRouter();
-  const [videos, setVideos] = React.useState<VideoInfo[]>(() => {
-    // Load videos from localStorage on initial render
-    if (typeof window !== 'undefined') {
-      const savedVideos = localStorage.getItem('beemmeup-videos');
-      if (savedVideos) {
-        try {
-          return JSON.parse(savedVideos);
-        } catch (e) {
-          console.error('Error loading saved videos:', e);
-        }
-      }
-    }
-    return [];
-  });
-  const [selectedFile, setSelectedFile] = React.useState<File | null>(null);
-  const [isUploading, setIsUploading] = React.useState(false);
-  const [selectedMethod, setSelectedMethod] = React.useState<UploadMethod>('direct');
-  const [autoAnalyze, setAutoAnalyze] = React.useState(false);
-  const [hlsUrl, setHlsUrl] = React.useState('');
-  const fileInputRef = React.useRef<HTMLInputElement>(null);
 
-  // Save videos to localStorage whenever they change
-  React.useEffect(() => {
-    if (videos.length > 0) {
-      localStorage.setItem('beemmeup-videos', JSON.stringify(videos));
-    }
-  }, [videos]);
-
-  // Delete a single video
-  const deleteVideo = React.useCallback((videoId: string) => {
-    setVideos(prev => prev.filter(v => v.id !== videoId));
-    // If no videos left, clear localStorage
-    if (videos.length === 1) {
-      localStorage.removeItem('beemmeup-videos');
-    }
-  }, [videos.length]);
-
-  // Clear all videos
-  const clearAllVideos = React.useCallback(() => {
-    setVideos([]);
-    localStorage.removeItem('beemmeup-videos');
-  }, []);
-
-  // Poll for video status updates
-  React.useEffect(() => {
-    const checkVideoStatus = async () => {
-      const processingVideos = videos.filter(v => v.status === 'processing');
-      
-      if (processingVideos.length === 0) return;
-      
-      for (const video of processingVideos) {
-        try {
-          const response = await fetch(`/api/video/${video.id}/status`);
-          if (response.ok) {
-            const data = await response.json();
-            
-            // Use startTransition for non-urgent updates to prevent blocking
-            React.startTransition(() => {
-              if (data.status === 'ready') {
-                setVideos(prev => {
-                  const currentVideo = prev.find(v => v.id === video.id);
-                  // Only update if status actually changed
-                  if (currentVideo?.status !== 'ready' || currentVideo?.url !== data.url) {
-                    return prev.map(v => 
-                      v.id === video.id 
-                        ? { ...v, status: 'ready', url: data.url, progress: 100 } 
-                        : v
-                    );
-                  }
-                  return prev;
-                });
-              } else if (data.status === 'processing') {
-                // Update progress during processing
-                let newProgress = data.progress || video.progress || 50;
-                
-                // If we're stuck at 50% and have a processingState, increment slowly
-                if (newProgress === 50 && data.processingState === 'RUNNING' && video.progress >= 50) {
-                  // Increment by 10% every 10 seconds (1% per second), up to 85%
-                  newProgress = Math.min(85, video.progress + 10);
-                }
-                
-                // Only update if progress actually changed
-                if (newProgress !== video.progress) {
-                  console.log(`Updating video ${video.id} progress from ${video.progress}% to ${newProgress}%`);
-                  setVideos(prev => prev.map(v => 
-                    v.id === video.id 
-                      ? { ...v, progress: newProgress } 
-                      : v
-                  ));
-                }
-              } else if (data.status === 'error') {
-                setVideos(prev => {
-                  const currentVideo = prev.find(v => v.id === video.id);
-                  // Only update if status actually changed
-                  if (currentVideo?.status !== 'error') {
-                    return prev.map(v => 
-                      v.id === video.id 
-                        ? { ...v, status: 'error', error: data.error || 'Processing failed' } 
-                        : v
-                    );
-                  }
-                  return prev;
-                });
-              }
-            });
-          }
-        } catch (error) {
-          console.error('Error checking video status:', error);
-        }
-      }
-    };
-
-    // Only run if there are videos being processed
-    const hasProcessingVideos = videos.some(v => v.status === 'processing');
-    if (hasProcessingVideos) {
-      checkVideoStatus();
-      const interval = setInterval(checkVideoStatus, 10000); // Check every 10 seconds
-      return () => clearInterval(interval);
-    }
-  }, [videos]);
-
-  // Add video to the list (called from child components)
-  const addVideo = React.useCallback((videoInfo: VideoInfo) => {
-    setVideos(prev => {
-      const newVideos = [videoInfo, ...prev];
-      // Update localStorage with the new video
-      localStorage.setItem('beemmeup-videos', JSON.stringify(newVideos));
-      return newVideos;
-    });
-  }, []);
-
-  // Update video status (called from child components)
-  const updateVideo = React.useCallback((videoId: string, updates: Partial<VideoInfo>) => {
-    setVideos(prev => {
-      const newVideos = prev.map(v => 
-      v.id === videoId ? { ...v, ...updates } : v
-      );
-      console.log('Videos after update:', newVideos);
-      return newVideos;
-    });
-  }, []);
-
-  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file && file.type.startsWith('video/')) {
-      setSelectedFile(file);
-    }
-  };
-
-  const handleTraditionalUpload = async () => {
-    if (!selectedFile) return;
-
-    setIsUploading(true);
-    const videoId = Date.now().toString();
-    
-    // Add video to list with uploading status
-    const newVideo: VideoInfo = {
-      id: videoId,
-      title: selectedFile.name,
-      status: 'uploading',
-      progress: 0,
-    };
-    setVideos(prev => [newVideo, ...prev]);
-
-    try {
-      // Create FormData for file upload
-      const formData = new FormData();
-      formData.append('video', selectedFile);
-      formData.append('videoId', videoId);
-
-      // Upload video
-      const response = await fetch('/api/upload', {
-        method: 'POST',
-        body: formData,
-      });
-
-      if (!response.ok) {
-        throw new Error('Upload failed');
-      }
-
-      // Update video status to processing
-      setVideos(prev => prev.map(v => 
-        v.id === videoId ? { ...v, status: 'processing', progress: 50 } : v
-      ));
-
-      // Start processing
-      const processResponse = await fetch('/api/process', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ videoId }),
-      });
-
-      if (!processResponse.ok) {
-        throw new Error('Processing failed');
-      }
-
-      const result = await processResponse.json();
-
-      // Update video with ready status and URL
-      setVideos(prev => prev.map(v => 
-        v.id === videoId 
-          ? { ...v, status: 'ready', progress: 100, url: result.url } 
-          : v
-      ));
-      
-      // Navigate to analyzer if auto-analyze is enabled
-      if (autoAnalyze) {
-        router.push(`/video/${videoId}/analyze`);
-      }
-    } catch (error) {
-      // Update video with error status
-      setVideos(prev => prev.map(v => 
-        v.id === videoId 
-          ? { ...v, status: 'error', error: error instanceof Error ? error.message : 'Unknown error' } 
-          : v
-      ));
-    } finally {
-      setIsUploading(false);
-      setSelectedFile(null);
-      if (fileInputRef.current) {
-        fileInputRef.current.value = '';
-      }
-    }
-  };
-
-  const handleHlsSubmit = async () => {
-    if (!hlsUrl.trim()) return;
-
-    const videoId = Date.now().toString();
-    const urlParts = hlsUrl.split('/');
-    const title = urlParts[urlParts.length - 1] || 'HLS Playlist';
-    
-    // Use the proxy endpoint to handle relative URLs in HLS playlists
-    const proxiedUrl = `/api/hls-proxy?url=${encodeURIComponent(hlsUrl)}`;
-
-    // Add video to list with ready status since it's already an HLS playlist
-    const newVideo: VideoInfo = {
-      id: videoId,
-      title: title,
-      status: 'ready',
-      progress: 100,
-      url: proxiedUrl,
-    };
-    
-    setVideos(prev => [newVideo, ...prev]);
-    
-    // Store in Redis so the status API can find it
-    try {
-      const response = await fetch('/api/video/store-hls', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          videoId,
-          url: proxiedUrl,
-          originalUrl: hlsUrl,
-          title,
-        }),
-      });
-      
-      if (!response.ok) {
-        console.error('Failed to store HLS URL in Redis');
-      }
-    } catch (error) {
-      console.error('Error storing HLS URL:', error);
-    }
-    
-    // Clear the input
-    setHlsUrl('');
-    
-    // Navigate to analyzer if auto-analyze is enabled
-    if (autoAnalyze) {
-      router.push(`/video/${videoId}/analyze`);
-    }
-  };
-
-  const methods = [
+  const featureModules: FeatureModule[] = [
     {
-      id: 'direct' as UploadMethod,
-      title: 'Direct to Cloud',
-      description: 'Upload directly to Google Cloud Storage',
-      icon: CloudUpload,
+      id: 'hls',
+      title: 'HLS Video Processing',
+      description: 'Upload videos and generate HLS playlists with adaptive bitrate streaming',
+      longDescription: 'Upload your video files to generate HLS playlists with multiple quality levels, or analyze existing HLS playlists with deep segment inspection, quality level analysis, and adaptive bitrate configurations.',
+      icon: Video,
+      href: '/hls-video-processing',
+      gradient: 'from-purple-600/25 to-pink-600/25',
+      borderColor: 'border-purple-500/30',
+      iconBg: 'bg-purple-500/20',
+      iconColor: 'text-purple-400',
+      buttonGradient: 'from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700',
     },
     {
-      id: 'hls' as UploadMethod,
-      title: 'Upload HLS',
-      description: 'Analyze existing HLS playlist URL',
-      icon: LinkIcon,
+      id: 'what-ffmpeg',
+      title: 'What the FFMPEG',
+      description: 'Extremely detailed media file analysis with FFProbe, FFPlay, and FFMPEG',
+      longDescription: 'Upload any media file (video, audio, or image) to get comprehensive analysis including stream information, frame-level data, packet inspection, bitstream visualization, and codec-specific details. Perfect for deep media file inspection and debugging.',
+      icon: Zap,
+      href: '/what-the-ffmpeg',
+      gradient: 'from-yellow-600/25 to-orange-600/25',
+      borderColor: 'border-yellow-500/30',
+      iconBg: 'bg-yellow-500/20',
+      iconColor: 'text-yellow-400',
+      buttonGradient: 'from-yellow-600 to-orange-600 hover:from-yellow-700 hover:to-orange-700',
     },
-    // TODO: Add chunked and traditional upload methods back in
-    // {
-    //   id: 'chunked' as UploadMethod,
-    //   title: 'Chunked Upload',
-    //   description: 'Split large files into smaller chunks',
-    //   icon: Package,
-    // },
-    // {
-    //   id: 'traditional' as UploadMethod,
-    //   title: 'Traditional',
-    //   description: 'Standard upload (max 4.5MB)',
-    //   icon: Server,
-    // },
+    {
+      id: 'corruption-checker',
+      title: 'Video Corruption Checker',
+      description: 'Detect and fix common video file corruption issues',
+      longDescription: 'Upload any video file to check for corruption issues including missing metadata, codec problems, sync issues, and damaged frames. Get detailed analysis and FFmpeg commands to fix detected problems.',
+      icon: ShieldCheck,
+      href: '/corruption-check',
+      gradient: 'from-green-600/25 to-emerald-600/25',
+      borderColor: 'border-green-500/30',
+      iconBg: 'bg-green-500/20',
+      iconColor: 'text-green-400',
+      buttonGradient: 'from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700',
+    },
+    {
+      id: 'command-builder',
+      title: 'FFMPEG Command Builder',
+      description: 'Learn FFMPEG by building commands or analyzing existing ones',
+      longDescription: 'Interactive command builder with pre-defined operations or paste existing FFMPEG commands to visualize and understand what each flag does. Perfect for learning FFMPEG syntax and optimizing your video workflows.',
+      icon: Terminal,
+      href: '/ffmpeg-command-builder',
+      gradient: 'from-teal-600/25 to-cyan-600/25',
+      borderColor: 'border-teal-500/30',
+      iconBg: 'bg-teal-500/20',
+      iconColor: 'text-teal-400',
+      buttonGradient: 'from-teal-600 to-cyan-600 hover:from-teal-700 hover:to-cyan-700',
+    },
   ];
 
   return (
@@ -342,469 +90,50 @@ export default function HomePage() {
             </h1>
           </div>
           <p className="text-lg text-gray-300 max-w-2xl mx-auto">
-            Upload your video to generate HLS playlists and analyze them with deep segment inspection, 
-            quality level analysis, and adaptive bitrate configurations. Plus, use FFProbe to detect 
-            and fix potential corruption issues in media files ✨
+            A comprehensive platform for video processing, HLS streaming, media analysis, and FFMPEG command building. 
+            Explore our tools to upload videos, analyze media files, check for corruption, and learn FFMPEG commands ✨
           </p>
           <div className="max-w-3xl mx-auto mt-6">
-            <HlsSpecTips />
+            <ModuleSpecTips />
           </div>
         </div>
 
-        {/* Upload Method Selection - Updated to grid-cols-4 on larger screens */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-2 gap-4 mb-8">
-          {methods.map((method) => {
-            const Icon = method.icon;
+        {/* Feature Modules Grid (2x2) */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-8">
+          {featureModules.map((module) => {
+            const Icon = module.icon;
             return (
               <Card
-                key={method.id}
-                className={`cursor-pointer transition-all min-h-[180px] ${
-                  selectedMethod === method.id
-                    ? 'bg-purple-600/25 border-purple-500'
-                    : 'bg-white/15 border-white/20 hover:bg-white/25'
-                }`}
+                key={module.id}
+                className={`bg-gradient-to-br ${module.gradient} ${module.borderColor} border`}
                 style={{ isolation: 'isolate', contain: 'layout style paint' }}
-                onClick={() => setSelectedMethod(method.id)}
               >
-                <CardHeader className="text-center">
-                  <Icon className="h-8 w-8 text-purple-400 mb-2 mx-auto" />
-                  <CardTitle className="text-white text-lg">
-                    {method.title}
+                <CardHeader>
+                  <CardTitle className="text-white flex items-center gap-2">
+                    <div className={`p-2 ${module.iconBg} rounded-lg`}>
+                      <Icon className={`h-6 w-6 ${module.iconColor}`} />
+                    </div>
+                    {module.title}
                   </CardTitle>
                   <CardDescription className="text-gray-300">
-                    {method.description}
+                    {module.description}
                   </CardDescription>
                 </CardHeader>
+                <CardContent>
+                  <p className="text-sm text-gray-300 mb-4">
+                    {module.longDescription}
+                  </p>
+                  <Link href={module.href}>
+                    <Button className={`w-full bg-gradient-to-r ${module.buttonGradient} text-white`}>
+                      <Icon className="mr-2 h-4 w-4" />
+                      Open {module.title}
+                    </Button>
+                  </Link>
+                </CardContent>
               </Card>
             );
           })}
         </div>
-
-        {/* Upload Section */}
-        <Card className="mb-8 bg-white/15 border-white/20 min-h-[300px]" style={{ isolation: 'isolate', contain: 'layout style paint' }}>
-          <CardHeader>
-            <CardTitle className="text-white">
-              {selectedMethod === 'hls' ? 'Analyze HLS Playlist' : 'Upload Video'}
-            </CardTitle>
-            <CardDescription className="text-gray-300">
-              {selectedMethod === 'direct' && 'Upload directly to cloud storage for best performance'}
-              {selectedMethod === 'chunked' && 'Upload large files by splitting them into chunks'}
-              {selectedMethod === 'traditional' && 'Traditional upload method (limited to 4.5MB on Vercel)'}
-              {selectedMethod === 'hls' && 'Enter an HLS playlist URL to analyze segments, quality levels, and configurations'}
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="mb-4 flex items-center gap-2">
-              <input
-                type="checkbox"
-                id="auto-analyze"
-                checked={autoAnalyze}
-                onChange={(e) => setAutoAnalyze(e.target.checked)}
-                className="rounded border-gray-300"
-              />
-              <Label htmlFor="auto-analyze" className="text-white cursor-pointer">
-                Automatically open HLS analyzer after upload
-              </Label>
-            </div>
-            
-            {selectedMethod === 'direct' && (
-              <DirectUpload 
-                onUploadComplete={async (videoId, filename) => {
-                  console.log('Direct upload complete:', { videoId, filename });
-                  
-                  try {
-                  // Trigger processing after direct upload
-                    const response = await fetch('/api/process', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ 
-                      videoId, 
-                      gcsPath: filename 
-                    }),
-                    });
-                    
-                    if (!response.ok) {
-                      const errorText = await response.text();
-                      console.error('Process API error:', errorText);
-                      throw new Error(`Processing failed: ${response.status}`);
-                    }
-                    
-                    const result = await response.json();
-                    console.log('Process API result:', result);
-                    
-                    if (result.url) {
-                      updateVideo(videoId, {
-                        status: 'ready',
-                        url: result.url,
-                        progress: 100,
-                      });
-                      
-                      // Navigate to analyzer if auto-analyze is enabled
-                      if (autoAnalyze) {
-                        router.push(`/video/${videoId}/analyze`);
-                    }
-                    } else {
-                      throw new Error('No URL returned from processing');
-                    }
-                  } catch (error) {
-                    console.error('Error processing video:', error);
-                    updateVideo(videoId, {
-                      status: 'error',
-                      error: error instanceof Error ? error.message : 'Processing failed',
-                    });
-                  }
-                }}
-                onVideoAdded={addVideo}
-                onVideoUpdated={updateVideo}
-              />
-            )}
-            
-            {selectedMethod === 'hls' && (
-              <div className="space-y-4">
-                <div>
-                  <Label htmlFor="hls-url" className="text-white">HLS Playlist URL</Label>
-                  <Input
-                    id="hls-url"
-                    type="url"
-                    placeholder="https://devstreaming-cdn.apple.com/videos/streaming/examples/bipbop_4x3/bipbop_4x3_variant.m3u8"
-                    value={hlsUrl}
-                    onChange={(e) => setHlsUrl(e.target.value)}
-                    className="bg-white/10 border-white/20 text-white placeholder:text-gray-400 hover:bg-white/20 transition-colors"
-                  />
-                  <p className="text-xs text-gray-400 mt-2">
-                    Enter a valid HLS playlist URL (.m3u8 file). Works with both relative and absolute segment URLs.
-                  </p>
-                </div>
-
-                {/* Example URLs */}
-                <div className="space-y-2">
-                  <p className="text-xs text-gray-400">Try these example HLS playlists:</p>
-                  <div className="flex flex-wrap gap-2">
-                    <button
-                      type="button"
-                      onClick={() => setHlsUrl('https://devstreaming-cdn.apple.com/videos/streaming/examples/adv_dv_atmos/main.m3u8')}
-                      className="text-xs px-2 py-1 bg-white/10 hover:bg-white/20 rounded text-purple-300 transition-colors"
-                    >
-                      Advanced (fMP4)
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setHlsUrl('https://devstreaming-cdn.apple.com/videos/streaming/examples/img_bipbop_adv_example_ts/master.m3u8')}
-                      className="text-xs px-2 py-1 bg-white/10 hover:bg-white/20 rounded text-purple-300 transition-colors"
-                    >
-                      Advanced (TS)
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setHlsUrl('https://devstreaming-cdn.apple.com/videos/streaming/examples/bipbop_4x3/bipbop_4x3_variant.m3u8')}
-                      className="text-xs px-2 py-1 bg-white/10 hover:bg-white/20 rounded text-purple-300 transition-colors"
-                    >
-                      Basic 4:3 Playlist
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setHlsUrl('https://devstreaming-cdn.apple.com/videos/streaming/examples/bipbop_16x9/bipbop_16x9_variant.m3u8')}
-                      className="text-xs px-2 py-1 bg-white/10 hover:bg-white/20 rounded text-purple-300 transition-colors"
-                    >
-                      Basic 16:9 Playlist
-                    </button>
-                  </div>
-                </div>
-
-                <Button
-                  onClick={handleHlsSubmit}
-                  disabled={!hlsUrl.trim()}
-                  className="w-full bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white"
-                >
-                  <LinkIcon className="mr-2 h-4 w-4" />
-                  Analyze HLS Playlist
-                </Button>
-              </div>
-            )}
-            
-            {selectedMethod === 'chunked' && (
-              <ChunkedUpload 
-                onUploadComplete={async (videoId, filename) => {
-                  console.log('Chunked upload complete:', { videoId, filename });
-                  
-                  try {
-                  // Trigger processing after chunked upload
-                    const response = await fetch('/api/process', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ videoId }),
-                    });
-                    
-                    if (!response.ok) {
-                      const errorText = await response.text();
-                      console.error('Process API error:', errorText);
-                      throw new Error(`Processing failed: ${response.status}`);
-                    }
-                    
-                    const result = await response.json();
-                    console.log('Process API result:', result);
-                    
-                    if (result.url) {
-                      updateVideo(videoId, {
-                        status: 'ready',
-                        url: result.url,
-                        progress: 100,
-                      });
-                      
-                      // Navigate to analyzer if auto-analyze is enabled
-                      if (autoAnalyze) {
-                        router.push(`/video/${videoId}/analyze`);
-                    }
-                    } else {
-                      throw new Error('No URL returned from processing');
-                    }
-                  } catch (error) {
-                    console.error('Error processing video:', error);
-                    updateVideo(videoId, {
-                      status: 'error',
-                      error: error instanceof Error ? error.message : 'Processing failed',
-                    });
-                  }
-                }}
-                onVideoAdded={addVideo}
-                onVideoUpdated={updateVideo}
-              />
-            )}
-            
-            {selectedMethod === 'traditional' && (
-              <div className="space-y-4">
-                <div>
-                  <Label htmlFor="video-upload" className="text-white">Video File</Label>
-                  <Input
-                    id="video-upload"
-                    ref={fileInputRef}
-                    type="file"
-                    accept="video/*"
-                    onChange={handleFileSelect}
-                    disabled={isUploading}
-                    className="cursor-pointer bg-white/10 border-white/20 text-white file:bg-white/20 file:text-white file:border-0 hover:bg-white/20 transition-colors"
-                  />
-                </div>
-
-                {selectedFile && (
-                  <div className="p-4 bg-white/10 rounded-lg border border-white/20">
-                    <p className="text-sm font-medium text-white">{selectedFile.name}</p>
-                    <p className="text-xs text-gray-300">
-                      {(selectedFile.size / (1024 * 1024)).toFixed(2)} MB
-                    </p>
-                    {selectedFile.size > 4.5 * 1024 * 1024 && (
-                      <p className="text-xs text-yellow-400 mt-1">
-                        ⚠️ This file is too large for Vercel. Use Direct or Chunked upload instead.
-                      </p>
-                    )}
-                  </div>
-                )}
-
-                <Button
-                  onClick={handleTraditionalUpload}
-                  disabled={!selectedFile || isUploading}
-                  className="w-full bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white"
-                >
-                  {isUploading ? (
-                    <>
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      Uploading...
-                    </>
-                  ) : (
-                    <>
-                      <Upload className="mr-2 h-4 w-4" />
-                      Upload and Process
-                    </>
-                  )}
-                </Button>
-              </div>
-            )}
-          </CardContent>
-        </Card>
-
-        {/* Videos List */}
-        {videos.length > 0 && (
-          <div className="mb-6 flex items-center justify-between">
-            <h2 className="text-2xl font-semibold text-white">Upload History</h2>
-            <Button
-              onClick={clearAllVideos}
-              variant="ghost"
-              className="text-red-400 hover:text-red-300 hover:bg-red-500/20"
-            >
-              <Trash2 className="mr-2 h-4 w-4" />
-              Clear All
-            </Button>
-          </div>
-        )}
-        
-        <div className="space-y-6">
-          {videos.map(video => (
-            <Card key={video.id} className="bg-white/15 border-white/20" style={{ isolation: 'isolate', contain: 'layout style paint' }}>
-              <CardHeader>
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center space-x-3">
-                    <Video className="h-5 w-5 text-purple-400" />
-                    <CardTitle className="text-lg text-white">{video.title}</CardTitle>
-                  </div>
-                  <div className="flex items-center space-x-2">
-                    {video.status === 'uploading' && (
-                      <>
-                        <Loader2 className="h-4 w-4 animate-spin text-blue-400" />
-                        <span className="text-sm text-blue-400">Uploading...</span>
-                      </>
-                    )}
-                    {video.status === 'processing' && (
-                      <>
-                        <Loader2 className="h-4 w-4 animate-spin text-yellow-400" />
-                        <span className="text-sm text-yellow-400">Processing...</span>
-                      </>
-                    )}
-                    {video.status === 'ready' && (
-                      <>
-                        <CheckCircle2 className="h-4 w-4 text-green-400" />
-                        <span className="text-sm text-green-400">Ready</span>
-                      </>
-                    )}
-                    {video.status === 'error' && (
-                      <>
-                        <AlertCircle className="h-4 w-4 text-red-400" />
-                        <span className="text-sm text-red-400">Error</span>
-                      </>
-                    )}
-                    <Button
-                      onClick={() => deleteVideo(video.id)}
-                      variant="ghost"
-                      size="icon"
-                      className="ml-2 text-gray-400 hover:text-red-400 hover:bg-red-500/20"
-                    >
-                      <X className="h-4 w-4" />
-                    </Button>
-                  </div>
-                </div>
-              </CardHeader>
-              <CardContent>
-                {(video.status === 'uploading' || video.status === 'processing') && (
-                  <div className="mb-4">
-                    <Progress value={video.progress} className="mb-2" />
-                    <div className="flex justify-between text-sm">
-                      <span className="text-gray-300">
-                        {video.status === 'uploading' ? 'Uploading' : 'Processing'} video...
-                        {video.status === 'processing' && video.progress > 50 && video.progress < 100 && (
-                          <span className="text-xs text-gray-400 ml-2">
-                            ({video.progress < 60 ? 'Initializing' : video.progress < 90 ? 'Transcoding' : 'Finalizing'})
-                          </span>
-                        )}
-                      </span>
-                      <span className="text-yellow-400 font-semibold">
-                        {Math.round(video.progress)}%
-                      </span>
-                    </div>
-                  </div>
-                )}
-                
-                {video.status === 'error' && (
-                  <div className="p-4 bg-red-500/20 text-red-300 rounded-lg border border-red-500/30">
-                    <p className="text-sm">{video.error}</p>
-                  </div>
-                )}
-
-                {video.status === 'ready' && video.url && (
-                  <>
-                  <VideoPlayer
-                    src={video.url}
-                    className="w-full aspect-video"
-                    onQualityChange={(quality) => {
-                      console.log(`Video ${video.id} quality changed to:`, quality);
-                    }}
-                  />
-                    <div className="mt-4 flex gap-3">
-                      <Link href={`/video/${video.id}/analyze`} className="flex-1">
-                        <Button className="w-full bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700">
-                          <BarChart3 className="mr-2 h-4 w-4" />
-                          Analyze HLS Output
-                        </Button>
-                      </Link>
-                    </div>
-                  </>
-                )}
-              </CardContent>
-            </Card>
-          ))}
-        </div>
-
-        {/* What the FFMPEG Feature Card */}
-        <Card className="mt-8 bg-gradient-to-br from-yellow-600/25 to-orange-600/25 border-yellow-500/30" style={{ isolation: 'isolate', contain: 'layout style paint' }}>
-          <CardHeader>
-            <CardTitle className="text-white flex items-center gap-2">
-              <div className="p-2 bg-yellow-500/20 rounded-lg">
-                <Zap className="h-6 w-6 text-yellow-400" />
-              </div>
-              What the FFMPEG
-            </CardTitle>
-            <CardDescription className="text-gray-300">
-              Extremely detailed media file analysis with FFProbe, FFPlay, and FFMPEG
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <p className="text-sm text-gray-300 mb-4">
-              Upload any media file (video, audio, or image) to get comprehensive analysis including 
-              stream information, frame-level data, packet inspection, bitstream visualization, and 
-              codec-specific details. Perfect for deep media file inspection and debugging.
-            </p>
-            <Link href="/what-the-ffmpeg">
-              <Button className="w-full bg-gradient-to-r from-yellow-600 to-orange-600 hover:from-yellow-700 hover:to-orange-700 text-white">
-                <Zap className="mr-2 h-4 w-4" />
-                Open What the FFMPEG
-              </Button>
-            </Link>
-          </CardContent>
-        </Card>
-
-        {/* Corruption Checker Feature Card */}
-        <Card className="mt-8 bg-gradient-to-br from-green-600/25 to-emerald-600/25 border-green-500/30" style={{ isolation: 'isolate', contain: 'layout style paint' }}>
-          <CardHeader>
-            <CardTitle className="text-white flex items-center gap-2">
-              <div className="p-2 bg-green-500/20 rounded-lg">
-                <ShieldCheck className="h-6 w-6 text-green-400" />
-              </div>
-              Video Corruption Checker
-            </CardTitle>
-            <CardDescription className="text-gray-300">
-              Detect and fix common video file corruption issues
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <p className="text-sm text-gray-300 mb-4">
-              Upload any video file to check for corruption issues including missing metadata, 
-              codec problems, sync issues, and damaged frames. Get detailed analysis and FFmpeg 
-              commands to fix detected problems.
-            </p>
-            <Link href="/corruption-check">
-              <Button className="w-full bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white">
-                <ShieldCheck className="mr-2 h-4 w-4" />
-                Open Corruption Checker
-              </Button>
-            </Link>
-          </CardContent>
-        </Card>
-
-        {/* Empty State */}
-        {videos.length === 0 && (
-          <Card className="mt-8 bg-white/15 border-white/20" style={{ isolation: 'isolate', contain: 'layout style paint' }}>
-            <CardContent className="pt-6">
-              <div className="text-center py-12">
-                <Video className="mx-auto h-12 w-12 text-purple-400 mb-4" />
-                <h3 className="text-lg font-medium text-white mb-2">
-                  No videos uploaded yet
-                </h3>
-                <p className="text-sm text-gray-300 max-w-md mx-auto">
-                  Choose an upload method above and upload a video file to get started. 
-                  BeemMeUp will generate HLS playlists with multiple quality levels and provide detailed analysis tools.
-                </p>
-              </div>
-            </CardContent>
-          </Card>
-        )}
       </div>
     </div>
   );
