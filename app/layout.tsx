@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import { Inter } from 'next/font/google';
 import './globals.css';
 import { Footer } from '@/components/footer';
+import { Navigation } from '@/components/navigation';
 
 const inter = Inter({ 
   subsets: ['latin'],
@@ -35,8 +36,11 @@ export default function RootLayout({
         {/* Background overlay */}
         <div className="fixed inset-0 bg-gradient-to-t from-black/50 via-transparent to-transparent pointer-events-none -z-10 content-container" />
         
+        {/* Navigation */}
+        <Navigation />
+        
         {/* Main content */}
-        <main className="flex-1 relative z-0 main-content">
+        <main className="flex-1 relative z-0 main-content pt-16">
           {children}
         </main>
         
