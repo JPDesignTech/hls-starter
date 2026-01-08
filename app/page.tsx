@@ -3,7 +3,7 @@
 import * as React from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Zap, Video, ShieldCheck, Terminal, LucideIcon, Info, Download, Check, Star, Rocket, ArrowRight, Users, Camera, Heart, Target, Code } from 'lucide-react';
+import { Zap, Video, ShieldCheck, Terminal, LucideIcon, Info, Download, Check, Star, Rocket, ArrowRight, Users, Camera, Heart, Target, Code, GraduationCap, Play, Award, BookOpen } from 'lucide-react';
 import Link from 'next/link';
 import ModuleSpecTips from '@/components/module-spec-tips';
 
@@ -99,41 +99,149 @@ export default function HomePage() {
             </div>
           </div>
 
-          {/* Feature Modules Grid (2x2) */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-8">
-            {featureModules.map((module) => {
-            const Icon = module.icon;
-            return (
-              <Card
-                key={module.id}
-                className={`bg-gradient-to-br ${module.gradient} ${module.borderColor} border`}
-                style={{ isolation: 'isolate', contain: 'layout style paint' }}
-              >
-                <CardHeader>
-                  <CardTitle className="text-white flex items-center gap-2">
-                    <div className={`p-2 ${module.iconBg} rounded-lg`}>
-                      <Icon className={`h-6 w-6 ${module.iconColor}`} />
+          {/* Featured Tutorial Hero Section */}
+          <div className="py-8 mb-12">
+            <div className="max-w-6xl mx-auto">
+              <div className="relative overflow-hidden bg-gradient-to-br from-indigo-600/30 via-purple-600/30 to-pink-600/30 backdrop-blur-sm border-2 border-indigo-400/50 rounded-3xl p-8 md:p-12 shadow-2xl">
+                {/* Decorative elements */}
+                <div className="absolute top-0 right-0 w-64 h-64 bg-indigo-500/20 rounded-full blur-3xl"></div>
+                <div className="absolute bottom-0 left-0 w-64 h-64 bg-pink-500/20 rounded-full blur-3xl"></div>
+                
+                <div className="relative grid md:grid-cols-2 gap-8 items-center">
+                  {/* Left Side - Content */}
+                  <div>
+                    <div className="inline-flex items-center gap-2 bg-indigo-500/30 border border-indigo-400/50 rounded-full px-4 py-1 mb-4">
+                      <GraduationCap className="w-4 h-4 text-indigo-300" />
+                      <span className="text-indigo-200 text-sm">New Learning Path</span>
                     </div>
-                    {module.title}
-                  </CardTitle>
-                  <CardDescription className="text-gray-300">
-                    {module.description}
-                  </CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <p className="text-sm text-gray-300 mb-4">
-                    {module.longDescription}
-                  </p>
-                  <Link href={module.href}>
-                    <Button className={`w-full bg-gradient-to-r ${module.buttonGradient} text-white`}>
-                      <Icon className="mr-2 h-4 w-4" />
-                      Open {module.title}
-                    </Button>
-                  </Link>
-                </CardContent>
-              </Card>
-            );
-            })}
+                    
+                    <h2 className="text-white text-4xl font-bold mb-4">
+                      Interactive FFMPEG Tutorials
+                    </h2>
+                    
+                    <p className="text-white/80 text-lg mb-6 leading-relaxed">
+                      Master FFMPEG from the ground up with our comprehensive, interactive tutorial series. 
+                      Learn by doing with real-time command execution, visual examples, and hands-on challenges.
+                    </p>
+
+                    {/* Stats */}
+                    <div className="grid grid-cols-3 gap-4 mb-6">
+                      <div className="bg-white/10 backdrop-blur-sm rounded-lg p-3 border border-white/20">
+                        <div className="text-white text-2xl mb-1 font-bold">12</div>
+                        <div className="text-white/60 text-sm">Lessons</div>
+                      </div>
+                      <div className="bg-white/10 backdrop-blur-sm rounded-lg p-3 border border-white/20">
+                        <div className="text-white text-2xl mb-1 font-bold">3h</div>
+                        <div className="text-white/60 text-sm">Duration</div>
+                      </div>
+                      <div className="bg-white/10 backdrop-blur-sm rounded-lg p-3 border border-white/20">
+                        <div className="text-white text-2xl mb-1 font-bold">24</div>
+                        <div className="text-white/60 text-sm">Exercises</div>
+                      </div>
+                    </div>
+
+                    {/* CTA Button */}
+                    <Link href="/learn">
+                      <Button className="bg-gradient-to-r from-indigo-500 to-purple-500 hover:from-indigo-600 hover:to-purple-600 text-white px-8 py-4 rounded-xl transition-all duration-200 shadow-lg hover:shadow-xl flex items-center gap-3 group">
+                        <Play className="w-5 h-5 group-hover:scale-110 transition-transform" />
+                        <span className="text-lg">Start Learning FFMPEG</span>
+                      </Button>
+                    </Link>
+                  </div>
+
+                  {/* Right Side - Preview */}
+                  <div className="space-y-4">
+                    {/* Course Modules Preview */}
+                    <div className="bg-white/5 backdrop-blur-sm border border-white/20 rounded-xl p-6">
+                      <div className="flex items-center gap-2 mb-4">
+                        <BookOpen className="w-5 h-5 text-indigo-400" />
+                        <span className="text-white font-semibold">What You'll Learn</span>
+                      </div>
+                      <ul className="space-y-3">
+                        <li className="flex items-start gap-3">
+                          <div className="w-6 h-6 rounded-full bg-green-500/20 border border-green-400/50 flex items-center justify-center flex-shrink-0 mt-0.5">
+                            <span className="text-green-400 text-xs">✓</span>
+                          </div>
+                          <span className="text-white/80 text-sm">FFMPEG fundamentals and architecture</span>
+                        </li>
+                        <li className="flex items-start gap-3">
+                          <div className="w-6 h-6 rounded-full bg-green-500/20 border border-green-400/50 flex items-center justify-center flex-shrink-0 mt-0.5">
+                            <span className="text-green-400 text-xs">✓</span>
+                          </div>
+                          <span className="text-white/80 text-sm">Essential flags and their usage</span>
+                        </li>
+                        <li className="flex items-start gap-3">
+                          <div className="w-6 h-6 rounded-full bg-green-500/20 border border-green-400/50 flex items-center justify-center flex-shrink-0 mt-0.5">
+                            <span className="text-green-400 text-xs">✓</span>
+                          </div>
+                          <span className="text-white/80 text-sm">Video/audio processing techniques</span>
+                        </li>
+                        <li className="flex items-start gap-3">
+                          <div className="w-6 h-6 rounded-full bg-green-500/20 border border-green-400/50 flex items-center justify-center flex-shrink-0 mt-0.5">
+                            <span className="text-green-400 text-xs">✓</span>
+                          </div>
+                          <span className="text-white/80 text-sm font-medium">Real-world examples and best practices</span>
+                        </li>
+                      </ul>
+                    </div>
+
+                    {/* Certificate Badge */}
+                    <div className="bg-gradient-to-r from-yellow-500/20 to-orange-500/20 border border-yellow-400/50 rounded-xl p-4 flex items-center gap-3">
+                      <Award className="w-8 h-8 text-yellow-400" />
+                      <div>
+                        <div className="text-white text-sm font-semibold">Earn a certificate</div>
+                        <div className="text-white/60 text-xs">Complete all lessons to get certified</div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Tools Section */}
+          <div className="mb-12">
+            <div className="text-center mb-8">
+              <h2 className="text-4xl font-bold text-white mb-2">Our Tools</h2>
+              <p className="text-lg text-gray-300">Professional video processing and analysis tools</p>
+            </div>
+            
+            {/* Feature Modules Grid (2x2) */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              {featureModules.map((module) => {
+                const Icon = module.icon;
+                return (
+                  <Card
+                    key={module.id}
+                    className={`bg-gradient-to-br ${module.gradient} ${module.borderColor} border`}
+                    style={{ isolation: 'isolate', contain: 'layout style paint' }}
+                  >
+                    <CardHeader>
+                      <CardTitle className="text-white flex items-center gap-2">
+                        <div className={`p-2 ${module.iconBg} rounded-lg`}>
+                          <Icon className={`h-6 w-6 ${module.iconColor}`} />
+                        </div>
+                        {module.title}
+                      </CardTitle>
+                      <CardDescription className="text-gray-300">
+                        {module.description}
+                      </CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                      <p className="text-sm text-gray-300 mb-4">
+                        {module.longDescription}
+                      </p>
+                      <Link href={module.href}>
+                        <Button className={`w-full bg-gradient-to-r ${module.buttonGradient} text-white`}>
+                          <Icon className="mr-2 h-4 w-4" />
+                          Open {module.title}
+                        </Button>
+                      </Link>
+                    </CardContent>
+                  </Card>
+                );
+              })}
+            </div>
           </div>
         </div>
       </div>
