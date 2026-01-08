@@ -3,7 +3,7 @@
 import * as React from 'react';
 import { CheckCircle, Lock, Circle, ChevronDown, ChevronRight } from 'lucide-react';
 import { lessons, getModules, getLessonsByModule } from '@/lib/tutorial';
-import { getProgress, isLessonCompleted, isLessonUnlocked } from '@/lib/tutorial-progress';
+import { getProgress, isLessonCompleted, isLessonUnlocked, TutorialProgress } from '@/lib/tutorial-progress';
 import { getOverallProgress } from '@/lib/tutorial-progress';
 import Link from 'next/link';
 
@@ -13,17 +13,29 @@ interface TutorialSidebarProps {
 
 export function TutorialSidebar({ currentLessonId }: TutorialSidebarProps) {
   const [expandedModules, setExpandedModules] = React.useState<Set<string>>(new Set(['Fundamentals']));
-  const [progress, setProgress] = React.useState(getProgress());
+  // Initialize with default to match server render (no localStorage access during SSR)
+  const [progress, setProgress] = React.useState<TutorialProgress | null>(null);
+  const [overallProgress, setOverallProgress] = React.useState(0);
+  const [isMounted, setIsMounted] = React.useState(false);
 
-  // Update progress when it changes
+  // Only read from localStorage after component mounts (client-side only)
   React.useEffect(() => {
-    const interval = setInterval(() => {
-      setProgress(getProgress());
-    }, 1000);
+    setIsMounted(true);
+    const loadProgress = () => {
+      const currentProgress = getProgress();
+      const calculatedProgress = getOverallProgress(lessons.length);
+      setProgress(currentProgress);
+      setOverallProgress(calculatedProgress);
+    };
+    
+    // Load immediately
+    loadProgress();
+    
+    // Update progress periodically
+    const interval = setInterval(loadProgress, 1000);
     return () => clearInterval(interval);
   }, []);
 
-  const overallProgress = getOverallProgress(lessons.length);
   const modules = getModules();
 
   const toggleModule = (module: string) => {
@@ -39,6 +51,15 @@ export function TutorialSidebar({ currentLessonId }: TutorialSidebarProps) {
   };
 
   const getLessonStatus = (lessonId: string, unlockAfter?: string) => {
+    // Only check status after component has mounted (to avoid hydration mismatch)
+    if (!isMounted) {
+      // Return default status during SSR/initial render
+      if (currentLessonId === lessonId) {
+        return 'current';
+      }
+      return unlockAfter ? 'locked' : 'available';
+    }
+    
     if (isLessonCompleted(lessonId)) {
       return 'completed';
     }
@@ -75,7 +96,10 @@ export function TutorialSidebar({ currentLessonId }: TutorialSidebarProps) {
           {modules.map((module) => {
             const moduleLessons = getLessonsByModule(module);
             const isExpanded = expandedModules.has(module);
-            const completedCount = moduleLessons.filter(l => isLessonCompleted(l.id)).length;
+            // Only calculate completed count after mount to avoid hydration mismatch
+            const completedCount = isMounted 
+              ? moduleLessons.filter(l => isLessonCompleted(l.id)).length 
+              : 0;
             const progressText = `${completedCount}/${moduleLessons.length}`;
 
             return (

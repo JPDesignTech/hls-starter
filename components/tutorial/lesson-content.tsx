@@ -131,7 +131,7 @@ export function LessonContent({ lesson, onNext, onPrevious, hasNext, hasPrevious
 
       case 'quiz':
         return (
-          <div key={index} className="my-6">
+          <div key={`${lesson.id}-quiz-${index}`} className="my-6">
             <QuizComponent
               block={block}
               lessonId={lesson.id}
