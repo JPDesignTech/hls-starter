@@ -1,13 +1,17 @@
 'use client';
 
 import * as React from 'react';
-import { Copy, Terminal, Info, Check, AlertCircle, FileInput, FileOutput, Code, ExternalLink } from 'lucide-react';
+import Link from 'next/link';
+import { Copy, Terminal, Info, Check, AlertCircle, FileInput, FileOutput, Code, ExternalLink, ArrowLeft } from 'lucide-react';
 import { parseCommand, getCommandBreakdown, validateCommand } from '@/lib/ffmpeg-utils';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 
-interface AnalyzeModeProps {}
+interface AnalyzeModeProps {
+  initialCommand?: string;
+  returnTo?: string;
+}
 
 const exampleCommands = [
   {
@@ -32,13 +36,20 @@ const exampleCommands = [
   },
 ];
 
-export function AnalyzeMode({}: AnalyzeModeProps) {
-  const [commandInput, setCommandInput] = React.useState('');
+export function AnalyzeMode({ initialCommand = '', returnTo }: AnalyzeModeProps) {
+  const [commandInput, setCommandInput] = React.useState(initialCommand);
   const [parsedCommand, setParsedCommand] = React.useState<ReturnType<typeof parseCommand> | null>(null);
   const [breakdown, setBreakdown] = React.useState<ReturnType<typeof getCommandBreakdown>>([]);
   const [validation, setValidation] = React.useState<ReturnType<typeof validateCommand> | null>(null);
   const [copied, setCopied] = React.useState(false);
   const [hasAnalyzed, setHasAnalyzed] = React.useState(false);
+
+  // Set initial command when component mounts or initialCommand changes
+  React.useEffect(() => {
+    if (initialCommand) {
+      setCommandInput(initialCommand);
+    }
+  }, [initialCommand]);
 
   const handleAnalyze = React.useCallback(() => {
     if (!commandInput.trim()) return;
@@ -137,6 +148,17 @@ export function AnalyzeMode({}: AnalyzeModeProps) {
 
   return (
     <div className="space-y-6">
+      {/* Return Link */}
+      {returnTo && (
+        <Link
+          href={returnTo}
+          className="inline-flex items-center gap-2 text-teal-400 hover:text-teal-300 transition-colors text-sm mb-4"
+        >
+          <ArrowLeft className="h-4 w-4" />
+          Return to Tutorial
+        </Link>
+      )}
+
       {/* Command Input */}
       <Card className="bg-white/5 backdrop-blur-sm border-white/10">
         <CardHeader>
@@ -146,6 +168,11 @@ export function AnalyzeMode({}: AnalyzeModeProps) {
           </CardTitle>
           <CardDescription className="text-gray-300">
             Paste an existing FFMPEG command to visualize and understand each part
+            {initialCommand && (
+              <span className="block mt-1 text-teal-400 text-xs">
+                Command pre-filled from tutorial
+              </span>
+            )}
           </CardDescription>
         </CardHeader>
         <CardContent>

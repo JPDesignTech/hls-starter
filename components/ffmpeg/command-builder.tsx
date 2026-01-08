@@ -9,9 +9,11 @@ import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 
 interface CommandBuilderProps {
   onBack?: () => void;
+  initialCommand?: string;
+  returnTo?: string;
 }
 
-export function CommandBuilder({ onBack }: CommandBuilderProps) {
+export function CommandBuilder({ onBack, initialCommand, returnTo }: CommandBuilderProps) {
   const [selectedOperation, setSelectedOperation] = React.useState<Operation>(operations[0]);
   const [mode, setMode] = React.useState<'build' | 'analyze'>('build');
 
@@ -71,7 +73,7 @@ export function CommandBuilder({ onBack }: CommandBuilderProps) {
               onOperationSelect={setSelectedOperation}
             />
           ) : (
-            <AnalyzeMode />
+            <AnalyzeMode initialCommand={initialCommand} returnTo={returnTo} />
           )}
         </div>
       </div>
