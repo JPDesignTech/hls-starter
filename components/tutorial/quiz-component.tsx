@@ -4,7 +4,7 @@ import * as React from 'react';
 import { CheckCircle, XCircle, AlertCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { QuizBlock } from '@/lib/tutorial-content';
+import { QuizBlock } from '@/lib/tutorial';
 import { recordQuizScore } from '@/lib/tutorial-progress';
 
 interface QuizComponentProps {

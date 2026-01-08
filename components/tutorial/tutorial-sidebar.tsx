@@ -2,7 +2,7 @@
 
 import * as React from 'react';
 import { CheckCircle, Lock, Circle, ChevronDown, ChevronRight } from 'lucide-react';
-import { lessons, getModules, getLessonsByModule } from '@/lib/tutorial-content';
+import { lessons, getModules, getLessonsByModule } from '@/lib/tutorial';
 import { getProgress, isLessonCompleted, isLessonUnlocked } from '@/lib/tutorial-progress';
 import { getOverallProgress } from '@/lib/tutorial-progress';
 import Link from 'next/link';

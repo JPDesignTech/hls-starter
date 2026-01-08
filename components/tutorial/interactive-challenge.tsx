@@ -5,7 +5,7 @@ import { CheckCircle, XCircle, Lightbulb, AlertCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
-import { ChallengeBlock } from '@/lib/tutorial-content';
+import { ChallengeBlock } from '@/lib/tutorial';
 import { completeChallenge } from '@/lib/tutorial-progress';
 
 interface InteractiveChallengeProps {

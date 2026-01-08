@@ -1,0 +1,268 @@
+# FFMPEG Tutorial Content Rules
+
+## File Structure and Organization
+
+### Lesson Files
+- **Location**: `lib/tutorial/data/modules/{module-name}/{lesson-id}.ts`
+- **Naming**: Use kebab-case for lesson IDs (e.g., `what-is-ffmpeg.ts`, `video-codecs.ts`)
+- **Export**: Each lesson file must export a const with camelCase name matching the lesson ID
+- **Example**: `what-is-ffmpeg.ts` exports `whatIsFFmpeg`
+
+### Module Organization
+- Each module has its own directory under `lib/tutorial/data/modules/`
+- Module directories: `fundamentals/`, `video-processing/`, `audio-processing/`
+- Each module must have an `index.ts` that:
+  - Imports all lessons from the module
+  - Exports a `Module` object with `id`, `title`, `description`, and `lessons` array
+
+## Lesson Structure Template
+
+```typescript
+import { Lesson } from '@/lib/tutorial/types';
+
+export const lessonId: Lesson = {
+  id: 'lesson-id',                    // kebab-case, matches filename
+  title: 'Lesson Title',              // Human-readable title
+  module: 'Module Name',              // Must match module directory name
+  duration: 20,                       // Estimated minutes
+  unlockAfter: 'previous-lesson-id',  // Optional: prerequisite lesson ID
+  content: [
+    // Content blocks go here
+  ]
+};
+```
+
+## Content Block Types and Templates
+
+### 1. TextBlock
+Use for markdown-formatted explanatory content.
+
+```typescript
+{
+  type: 'text',
+  title: 'Optional Section Title',  // Optional
+  content: `Markdown content here.
+
+## Headers
+- **Bold** text
+- Lists
+- Code blocks with \`\`\`code\`\`\``
+}
+```
+
+### 2. CodeBlock
+Use for FFmpeg command examples with explanations.
+
+```typescript
+{
+  type: 'code',
+  command: 'ffmpeg -i input.mp4 output.avi',
+  explanation: 'Brief explanation of what this command does',
+  flagBreakdown: [                    // Optional but recommended
+    {
+      flag: '-i input.mp4',
+      description: 'Specify the input file'
+    },
+    {
+      flag: 'output.avi',
+      description: 'Output filename and format'
+    }
+  ],
+  tryItYourself: true                 // Optional: adds "Try it yourself" button
+}
+```
+
+### 3. ChallengeBlock
+Use for interactive coding challenges.
+
+```typescript
+{
+  type: 'challenge',
+  title: 'Challenge Title',
+  description: 'Clear description of what the user should accomplish',
+  requirements: [
+    'Requirement 1',
+    'Requirement 2',
+    'Requirement 3'
+  ],
+  hints: [
+    'First hint',
+    'Second hint (more specific)',
+    'Final hint (almost gives it away)'
+  ],
+  solution: 'ffmpeg -i input.mp4 output.mp4',
+  validation: {                       // Optional but recommended
+    type: 'contains',                 // 'exact' | 'contains' | 'regex'
+    value: '-i input.mp4'
+  }
+}
+```
+
+### 4. QuizBlock
+Use for knowledge checks.
+
+```typescript
+{
+  type: 'quiz',
+  question: 'What does the -i flag do?',
+  options: [
+    { id: 'a', text: 'Option A', correct: false },
+    { id: 'b', text: 'Option B (correct)', correct: true },
+    { id: 'c', text: 'Option C', correct: false },
+    { id: 'd', text: 'Option D', correct: false }
+  ],
+  explanation: 'Detailed explanation of why the correct answer is correct'
+}
+```
+
+**Important**: Exactly ONE option must have `correct: true`.
+
+### 5. IntroductionBlock
+Use for lesson introductions.
+
+```typescript
+{
+  type: 'introduction',
+  heading: 'Introduction',
+  content: 'Brief introduction text explaining what this lesson covers.'
+}
+```
+
+### 6. BulletsBlock
+Use for bulleted lists with optional heading and content.
+
+```typescript
+{
+  type: 'bullets',
+  heading: 'Section Heading',
+  content: 'Optional introductory text before bullets',  // Optional
+  bullets: [
+    'First bullet point',
+    'Second bullet point',
+    'Third bullet point'
+  ]
+}
+```
+
+### 7. PreviewBlock
+Use for interactive video previews.
+
+```typescript
+{
+  type: 'preview',
+  heading: 'Try It: Action Name',
+  content: 'Description of what the preview demonstrates',
+  code: 'ffmpeg -i sample.mp4 -vf "scale=1280:720" output.mp4',
+  explanation: 'Optional explanation of the command',  // Optional
+  previewType: 'resize',  // 'resize' | 'crop' | 'format' | 'filter'
+  sampleVideoId: 'sample-resize-001'  // Unique ID for sample video
+}
+```
+
+## Content Block Ordering Best Practices
+
+1. **Start with IntroductionBlock** - Sets context
+2. **Follow with TextBlock** - Provides background/explanation
+3. **Add CodeBlock examples** - Show practical usage
+4. **Include BulletsBlock** - Summarize key points
+5. **Add ChallengeBlock** - Let users practice
+6. **End with QuizBlock** - Test understanding
+7. **Use PreviewBlock** - For visual demonstrations
+
+## Lesson Content Guidelines
+
+### Duration Estimation
+- Base duration on average reading speed (200 words/min)
+- Add time for code examples (2-3 min each)
+- Add time for challenges (5-10 min each)
+- Add time for quizzes (2-3 min each)
+
+### Unlock Prerequisites
+- First lesson in a module: No `unlockAfter`
+- Subsequent lessons: Set `unlockAfter` to the previous lesson's ID
+- Cross-module dependencies: Use the last lesson ID from the prerequisite module
+
+### Content Quality Standards
+- **Code examples**: Always include `flagBreakdown` for complex commands
+- **Challenges**: Provide 2-4 hints, progressing from general to specific
+- **Quizzes**: Ensure exactly one correct answer, provide clear explanations
+- **Text content**: Use markdown formatting for readability
+- **Explanations**: Be clear and concise, avoid jargon without context
+
+## Module Index File Template
+
+```typescript
+import { Module } from '@/lib/tutorial/types';
+import { lesson1 } from './lesson-1';
+import { lesson2 } from './lesson-2';
+// ... import all lessons
+
+export const moduleNameModule: Module = {
+  id: 'module-name',  // kebab-case, matches directory name
+  title: 'Module Name',  // Human-readable name
+  description: 'Brief description of what this module covers',
+  lessons: [
+    lesson1,
+    lesson2,
+    // ... all lessons in order
+  ]
+};
+```
+
+## Adding a New Lesson
+
+1. **Create lesson file** in appropriate module directory
+2. **Follow naming convention**: `{lesson-id}.ts`
+3. **Export lesson** with camelCase name
+4. **Add to module index**: Import and add to `lessons` array
+5. **Set unlockAfter**: Link to previous lesson if not first in module
+6. **Test**: Verify lesson appears in sidebar and renders correctly
+
+## Adding a New Module
+
+1. **Create module directory**: `lib/tutorial/data/modules/{module-name}/`
+2. **Create lesson files** following naming conventions
+3. **Create module index**: `index.ts` with Module export
+4. **Update data registry**: Add module to `lib/tutorial/data/index.ts`
+5. **Verify**: Check that module appears in sidebar
+
+## Type Safety
+
+- Always import types from `@/lib/tutorial/types`
+- Use TypeScript interfaces: `Lesson`, `ContentBlock`, `Module`
+- Content blocks are discriminated unions - use `type` property for type narrowing
+- All required fields must be present, optional fields can be omitted
+
+## Code Style
+
+- Use single quotes for strings
+- Use template literals for multi-line content
+- Indent with 2 spaces
+- Add trailing commas in arrays/objects
+- Use descriptive variable names (camelCase for exports)
+
+## Common Patterns
+
+### Progressive Disclosure
+Start simple, build complexity:
+1. Basic example
+2. Example with one new concept
+3. Advanced example combining concepts
+
+### Challenge Validation
+- Use `contains` for flexible validation (most common)
+- Use `exact` for precise command matching
+- Use `regex` for complex pattern matching
+
+### Quiz Options
+- Always provide 4 options (a, b, c, d)
+- Make incorrect options plausible
+- Ensure exactly one correct answer
+- Provide detailed explanations
+
+## File References
+
+- Types: `lib/tutorial/types/`
+- Data: `lib/tutorial/data/`
+- Utils: `lib/tutorial/utils/`
+- Main entry: `lib/tutorial/index.ts`

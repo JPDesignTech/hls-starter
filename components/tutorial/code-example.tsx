@@ -4,7 +4,7 @@ import * as React from 'react';
 import { Copy, Check, ExternalLink } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
-import { CodeBlock } from '@/lib/tutorial-content';
+import { CodeBlock } from '@/lib/tutorial';
 import Link from 'next/link';
 
 interface CodeExampleProps {
