@@ -54,20 +54,67 @@ export async function POST(request: NextRequest) {
       targetUrl = await getFileUrl(fileId, (fileMetadata as any).filename);
     }
 
-    // Create cache key
-    const optionsHash = hashOptions(options);
+    // Extract pagination parameters
+    const page = options.page || 0;
+    const pageSize = options.pageSize || 100;
+    const needsPagination = (options.showFrames || options.showPackets) && (page !== undefined || pageSize !== undefined);
+
+    // Create cache key (without pagination params for full data cache)
+    const cacheOptions = { ...options };
+    delete cacheOptions.page;
+    delete cacheOptions.pageSize;
+    const optionsHash = hashOptions(cacheOptions);
     const cacheKey = `wtf:probe:${fileId || hashOptions(targetUrl)}:${optionsHash}`;
 
     // Check cache first
     const cached = await kv.get(cacheKey);
     if (cached) {
+      let responseData = cached;
+      
+      // Apply pagination if needed
+      if (needsPagination && cached) {
+        responseData = { ...cached };
+        
+        if (options.showFrames && Array.isArray(cached.frames)) {
+          const totalFrames = cached.frames.length;
+          const start = page * pageSize;
+          const end = start + pageSize;
+          responseData.frames = cached.frames.slice(start, end);
+          responseData.pagination = {
+            frames: {
+              page,
+              pageSize,
+              total: totalFrames,
+              totalPages: Math.ceil(totalFrames / pageSize),
+            },
+          };
+        }
+        
+        if (options.showPackets && Array.isArray(cached.packets)) {
+          const totalPackets = cached.packets.length;
+          const start = page * pageSize;
+          const end = start + pageSize;
+          responseData.packets = cached.packets.slice(start, end);
+          responseData.pagination = {
+            ...responseData.pagination,
+            packets: {
+              page,
+              pageSize,
+              total: totalPackets,
+              totalPages: Math.ceil(totalPackets / pageSize),
+            },
+          };
+        }
+      }
+
       return NextResponse.json({
         success: true,
-        data: cached,
+        data: responseData,
         cached: true,
         metadata: {
           fileId,
           timestamp: new Date().toISOString(),
+          paginated: needsPagination,
         },
       });
     }
@@ -100,18 +147,56 @@ export async function POST(request: NextRequest) {
 
     const probeData = result.data;
 
-    // Cache result (TTL: 1 hour for basic, 24 hours for detailed)
+    // Cache full result (TTL: 1 hour for basic, 24 hours for detailed)
     const ttl = detailed ? 86400 : 3600; // 24 hours or 1 hour
     await kv.setex(cacheKey, ttl, probeData);
 
+    // Apply pagination to response if needed
+    let responseData = probeData;
+    if (needsPagination) {
+      responseData = { ...probeData };
+      
+      if (options.showFrames && Array.isArray(probeData.frames)) {
+        const totalFrames = probeData.frames.length;
+        const start = page * pageSize;
+        const end = start + pageSize;
+        responseData.frames = probeData.frames.slice(start, end);
+        responseData.pagination = {
+          frames: {
+            page,
+            pageSize,
+            total: totalFrames,
+            totalPages: Math.ceil(totalFrames / pageSize),
+          },
+        };
+      }
+      
+      if (options.showPackets && Array.isArray(probeData.packets)) {
+        const totalPackets = probeData.packets.length;
+        const start = page * pageSize;
+        const end = start + pageSize;
+        responseData.packets = probeData.packets.slice(start, end);
+        responseData.pagination = {
+          ...responseData.pagination,
+          packets: {
+            page,
+            pageSize,
+            total: totalPackets,
+            totalPages: Math.ceil(totalPackets / pageSize),
+          },
+        };
+      }
+    }
+
     return NextResponse.json({
       success: true,
-      data: probeData,
+      data: responseData,
       cached: false,
       metadata: {
         fileId,
         timestamp: new Date().toISOString(),
-        options,
+        options: cacheOptions,
+        paginated: needsPagination,
       },
     });
   } catch (error) {

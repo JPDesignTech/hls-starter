@@ -5,7 +5,7 @@ import { Menu, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { TutorialSidebar } from '@/components/tutorial/tutorial-sidebar';
 import { LessonContent } from '@/components/tutorial/lesson-content';
-import { lessons, getLessonById } from '@/lib/tutorial-content';
+import { lessons, getLessonById } from '@/lib/tutorial';
 import { setCurrentLesson, isLessonUnlocked } from '@/lib/tutorial-progress';
 import { useSearchParams, useRouter } from 'next/navigation';
 

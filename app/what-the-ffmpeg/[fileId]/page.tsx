@@ -37,6 +37,19 @@ import { BinaryVisualizer } from '@/components/bitstream/binary-visualizer';
 import { StructureTree } from '@/components/bitstream/structure-tree';
 import { ParameterSetViewer } from '@/components/bitstream/parameter-set-viewer';
 import { NALTimeline } from '@/components/bitstream/nal-timeline';
+import { ErrorBoundary } from '@/components/what-the-ffmpeg/error-boundary';
+import { ErrorDisplay } from '@/components/what-the-ffmpeg/error-display';
+import { HelpTooltip, HelpIcon, WTF_HELP } from '@/components/what-the-ffmpeg/help-tooltips';
+import { retry } from '@/lib/utils/retry';
+import { 
+  OverviewSkeleton, 
+  StreamsSkeleton, 
+  FramesSkeleton, 
+  PacketsSkeleton, 
+  TimelineSkeleton, 
+  BitstreamSkeleton,
+  CodecSkeleton 
+} from '@/components/what-the-ffmpeg/skeleton-loaders';
 
 interface FileMetadata {
   fileId: string;
@@ -74,7 +87,7 @@ interface FrameData {
   [key: string]: any; // Allow other FFProbe fields
 }
 
-export default function FileAnalysisPage() {
+function FileAnalysisPage() {
   const params = useParams();
   const fileId = params.fileId as string;
   const [activeTab, setActiveTab] = React.useState('overview');
@@ -349,15 +362,21 @@ export default function FileAnalysisPage() {
       setLoading(true);
       setError(null);
 
-      // Load file metadata
-      const metadataResponse = await fetch(`/api/what-the-ffmpeg/${fileId}/metadata`);
-      if (!metadataResponse.ok) {
-        throw new Error('Failed to load file metadata');
-      }
-      const metadata = await metadataResponse.json();
+      // Load file metadata with retry
+      const metadata = await retry(async () => {
+        const metadataResponse = await fetch(`/api/what-the-ffmpeg/${fileId}/metadata`);
+        if (!metadataResponse.ok) {
+          throw new Error('Failed to load file metadata');
+        }
+        return await metadataResponse.json();
+      }, {
+        maxRetries: 3,
+        retryDelay: 1000,
+      });
+
       setFileMetadata(metadata);
 
-      // Load probe data if available
+      // Load probe data if available (non-blocking, no retry for initial load)
       try {
         const probeResponse = await fetch('/api/what-the-ffmpeg/probe', {
           method: 'POST',
@@ -379,6 +398,7 @@ export default function FileAnalysisPage() {
         }
       } catch (probeError) {
         console.warn('Failed to load probe data:', probeError);
+        // Don't set error for probe data failure on initial load
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load file data');
@@ -392,33 +412,38 @@ export default function FileAnalysisPage() {
       setAnalyzing(true);
       setError(null);
 
-      const response = await fetch('/api/what-the-ffmpeg/probe', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          fileId,
-          options: {
-            showFormat: true,
-            showStreams: true,
-            showFrames: includeFrames,
-            showPackets: false,
-          },
-        }),
-      });
+      await retry(async () => {
+        const response = await fetch('/api/what-the-ffmpeg/probe', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            fileId,
+            options: {
+              showFormat: true,
+              showStreams: true,
+              showFrames: includeFrames,
+              showPackets: false,
+            },
+          }),
+        });
 
-      if (!response.ok) {
-        throw new Error('Analysis failed');
-      }
-
-      const result = await response.json();
-      if (result.success) {
-        setProbeData(result.data);
-        if (includeFrames && result.data.frames) {
-          setFramesData(result.data.frames);
+        if (!response.ok) {
+          throw new Error('Analysis failed');
         }
-      } else {
-        throw new Error(result.error || 'Analysis failed');
-      }
+
+        const result = await response.json();
+        if (result.success) {
+          setProbeData(result.data);
+          if (includeFrames && result.data.frames) {
+            setFramesData(result.data.frames);
+          }
+        } else {
+          throw new Error(result.error || 'Analysis failed');
+        }
+      }, {
+        maxRetries: 3,
+        retryDelay: 1000,
+      });
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Analysis failed');
     } finally {
@@ -431,29 +456,38 @@ export default function FileAnalysisPage() {
       setLoadingFrames(true);
       setError(null);
 
-      const response = await fetch('/api/what-the-ffmpeg/probe', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          fileId,
-          options: {
-            showFormat: true,
-            showStreams: true,
-            showFrames: true,
-            showPackets: false,
-          },
-        }),
+      await retry(async () => {
+        const response = await fetch('/api/what-the-ffmpeg/probe', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            fileId,
+            options: {
+              showFormat: true,
+              showStreams: true,
+              showFrames: true,
+              showPackets: false,
+              page: 0,
+              pageSize: 100,
+            },
+          }),
+        });
+
+        if (!response.ok) {
+          throw new Error('Failed to load frames');
+        }
+
+        const result = await response.json();
+        if (result.success && result.data.frames) {
+          setFramesData(result.data.frames);
+          setProbeData(result.data);
+        } else {
+          throw new Error(result.error || 'Failed to load frames');
+        }
+      }, {
+        maxRetries: 3,
+        retryDelay: 1000,
       });
-
-      if (!response.ok) {
-        throw new Error('Failed to load frames');
-      }
-
-      const result = await response.json();
-      if (result.success && result.data.frames) {
-        setFramesData(result.data.frames);
-        setProbeData(result.data);
-      }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load frames');
     } finally {
@@ -466,39 +500,45 @@ export default function FileAnalysisPage() {
       setLoadingPackets(true);
       setError(null);
 
-      const response = await fetch('/api/what-the-ffmpeg/probe', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          fileId,
-          options: {
-            showFormat: true,
-            showStreams: true,
-            showFrames: false,
-            showPackets: true,
-          },
-        }),
-      });
+      await retry(async () => {
+        const response = await fetch('/api/what-the-ffmpeg/probe', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            fileId,
+            options: {
+              showFormat: true,
+              showStreams: true,
+              showFrames: false,
+              showPackets: true,
+              page: packetPage,
+              pageSize: packetsPerPage,
+            },
+          }),
+        });
 
-      if (!response.ok) {
-        throw new Error('Failed to load packets');
-      }
-
-      const result = await response.json();
-      if (result.success) {
-        // Packets might be in result.data.packets array
-        if (result.data.packets && Array.isArray(result.data.packets)) {
-          setPacketsData(result.data.packets);
-        } else {
-          // If no packets array, set empty array and show message
-          setPacketsData([]);
-          setError('No packet data available. The file may not contain packet information, or packet analysis may not be supported for this format.');
+        if (!response.ok) {
+          throw new Error('Failed to load packets');
         }
-        setProbeData(result.data);
-        setPacketPage(0); // Reset to first page
-      } else {
-        throw new Error(result.error || 'Failed to load packets');
-      }
+
+        const result = await response.json();
+        if (result.success) {
+          // Packets might be in result.data.packets array
+          if (result.data.packets && Array.isArray(result.data.packets)) {
+            setPacketsData(result.data.packets);
+          } else {
+            // If no packets array, set empty array and show message
+            setPacketsData([]);
+            setError('No packet data available. The file may not contain packet information, or packet analysis may not be supported for this format.');
+          }
+          setProbeData(result.data);
+        } else {
+          throw new Error(result.error || 'Failed to load packets');
+        }
+      }, {
+        maxRetries: 3,
+        retryDelay: 1000,
+      });
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load packets');
     } finally {
@@ -580,12 +620,18 @@ export default function FileAnalysisPage() {
     }
   };
 
+  // Load file data on mount
+  React.useEffect(() => {
+    loadFileData();
+  }, [fileId]);
+
+
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="text-center">
-          <Loader2 className="h-8 w-8 animate-spin text-orange-400 mx-auto mb-4" />
-          <p className="text-gray-300">Loading file data...</p>
+      <div className="min-h-screen relative">
+        <div className="fixed inset-0 bg-gradient-to-br from-gray-900 via-orange-900 to-yellow-900 animate-gradient -z-10" />
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
+          <OverviewSkeleton />
         </div>
       </div>
     );
@@ -595,11 +641,14 @@ export default function FileAnalysisPage() {
     return (
       <div className="min-h-screen">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
-          <Alert className="bg-red-500/20 border-red-500/50">
-            <AlertCircle className="h-4 w-4" />
-            <AlertTitle>Error</AlertTitle>
-            <AlertDescription>{error}</AlertDescription>
-          </Alert>
+          <ErrorDisplay
+            error={error}
+            onRetry={() => {
+              setError(null);
+              loadFileData();
+            }}
+            title="Failed to Load File"
+          />
           <div className="mt-4">
             <Link href="/what-the-ffmpeg">
               <Button variant="ghost" className="text-white hover:bg-white/20">
@@ -676,11 +725,24 @@ export default function FileAnalysisPage() {
 
         {/* Error Display */}
         {error && (
-          <Alert className="bg-red-500/20 border-red-500/50 mb-6">
-            <AlertCircle className="h-4 w-4" />
-            <AlertTitle>Error</AlertTitle>
-            <AlertDescription>{error}</AlertDescription>
-          </Alert>
+          <ErrorDisplay
+            error={error}
+            onRetry={() => {
+              setError(null);
+              if (activeTab === 'frames') {
+                loadFrames();
+              } else if (activeTab === 'packets') {
+                loadPackets();
+              } else if (activeTab === 'bitstream') {
+                loadBitstream();
+              } else {
+                handleAnalyze(false);
+              }
+            }}
+            onDismiss={() => setError(null)}
+            dismissible
+            className="mb-6"
+          />
         )}
 
         {/* Tabs Navigation */}
@@ -714,7 +776,9 @@ export default function FileAnalysisPage() {
 
           {/* Overview Tab */}
           <TabsContent value="overview" className="space-y-6">
-            {!probeData ? (
+            {analyzing ? (
+              <OverviewSkeleton />
+            ) : !probeData ? (
               <Card className="bg-gradient-to-br from-yellow-600/20 to-orange-600/20 backdrop-blur-lg border-yellow-500/30">
                 <CardContent className="p-6 text-center">
                   <p className="text-gray-300 mb-4">No analysis data available yet</p>
@@ -743,7 +807,10 @@ export default function FileAnalysisPage() {
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <Card className="bg-white/10 backdrop-blur-lg border-white/20">
               <CardContent className="p-4">
-                <p className="text-sm text-gray-400 mb-1">Format</p>
+                <div className="flex items-center gap-2">
+                  <p className="text-sm text-gray-400 mb-1">Format</p>
+                  <HelpTooltip content={WTF_HELP.overview.format} />
+                </div>
                 <p className="text-white font-mono text-lg">
                   {probeData.format?.format_name || 'Unknown'}
                 </p>
@@ -751,7 +818,10 @@ export default function FileAnalysisPage() {
             </Card>
             <Card className="bg-white/10 backdrop-blur-lg border-white/20">
               <CardContent className="p-4">
-                <p className="text-sm text-gray-400 mb-1">Streams</p>
+                <div className="flex items-center gap-2">
+                  <p className="text-sm text-gray-400 mb-1">Streams</p>
+                  <HelpTooltip content="Number of media streams (video, audio, subtitles) in the file." />
+                </div>
                 <p className="text-white font-mono text-lg">
                   {probeData.streams?.length || 0}
                 </p>
@@ -759,7 +829,10 @@ export default function FileAnalysisPage() {
             </Card>
             <Card className="bg-white/10 backdrop-blur-lg border-white/20">
               <CardContent className="p-4">
-                <p className="text-sm text-gray-400 mb-1">Bitrate</p>
+                <div className="flex items-center gap-2">
+                  <p className="text-sm text-gray-400 mb-1">Bitrate</p>
+                  <HelpTooltip content={WTF_HELP.overview.bitrate} />
+                </div>
                 <p className="text-white font-mono text-lg">
                   {probeData.format?.bit_rate 
                     ? `${(parseInt(probeData.format.bit_rate) / 1000000).toFixed(2)} Mbps`
@@ -781,7 +854,10 @@ export default function FileAnalysisPage() {
                     <CardContent>
                       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                         <div>
-                          <p className="text-sm text-gray-400 mb-1">Format Name</p>
+                          <div className="flex items-center gap-2">
+                            <p className="text-sm text-gray-400 mb-1">Format Name</p>
+                            <HelpTooltip content={WTF_HELP.overview.format} />
+                          </div>
                           <p className="text-white font-mono text-lg">
                             {probeData.format.format_name || 'Unknown'}
                           </p>
@@ -794,7 +870,10 @@ export default function FileAnalysisPage() {
                         </div>
                         {probeData.format.duration && (
                           <div>
-                            <p className="text-sm text-gray-400 mb-1">Duration</p>
+                            <div className="flex items-center gap-2">
+                              <p className="text-sm text-gray-400 mb-1">Duration</p>
+                              <HelpTooltip content={WTF_HELP.overview.duration} />
+                            </div>
                             <p className="text-white font-mono text-lg">
                               {formatDuration(parseFloat(probeData.format.duration))}
                             </p>
@@ -802,7 +881,10 @@ export default function FileAnalysisPage() {
                         )}
                         {probeData.format.size && (
                           <div>
-                            <p className="text-sm text-gray-400 mb-1">File Size</p>
+                            <div className="flex items-center gap-2">
+                              <p className="text-sm text-gray-400 mb-1">File Size</p>
+                              <HelpTooltip content={WTF_HELP.overview.size} />
+                            </div>
                             <p className="text-white font-mono">
                               {formatBytes(parseInt(probeData.format.size))}
                             </p>
@@ -810,7 +892,10 @@ export default function FileAnalysisPage() {
                         )}
                         {probeData.format.bit_rate && (
                           <div>
-                            <p className="text-sm text-gray-400 mb-1">Bitrate</p>
+                            <div className="flex items-center gap-2">
+                              <p className="text-sm text-gray-400 mb-1">Bitrate</p>
+                              <HelpTooltip content={WTF_HELP.overview.bitrate} />
+                            </div>
                             <p className="text-white font-mono text-lg">
                               {(parseInt(probeData.format.bit_rate) / 1000000).toFixed(2)} Mbps
                             </p>
@@ -866,7 +951,9 @@ export default function FileAnalysisPage() {
 
           {/* Streams Tab - Phase 2 Implementation */}
           <TabsContent value="streams" className="space-y-6">
-            {!probeData ? (
+            {loading && !probeData ? (
+              <StreamsSkeleton />
+            ) : !probeData ? (
           <Card className="bg-white/10 backdrop-blur-lg border-white/20">
             <CardContent className="p-6 text-center">
                   <p className="text-gray-300 mb-4">No stream data available</p>
@@ -957,7 +1044,10 @@ export default function FileAnalysisPage() {
                           <h3 className="text-sm font-semibold text-gray-400 uppercase tracking-wide">Codec</h3>
                           <div className="space-y-2">
                             <div>
-                              <p className="text-xs text-gray-500 mb-1">Codec Name</p>
+                              <div className="flex items-center gap-2">
+                                <p className="text-xs text-gray-500 mb-1">Codec Name</p>
+                                <HelpTooltip content={WTF_HELP.streams.codec} />
+                              </div>
                               <p className="text-white font-mono text-lg">{stream.codec_name || 'Unknown'}</p>
                             </div>
                             <div>
@@ -972,13 +1062,19 @@ export default function FileAnalysisPage() {
                             )}
                             {stream.profile && (
                               <div>
-                                <p className="text-xs text-gray-500 mb-1">Profile</p>
+                                <div className="flex items-center gap-2">
+                                  <p className="text-xs text-gray-500 mb-1">Profile</p>
+                                  <HelpTooltip content={WTF_HELP.streams.profile} />
+                                </div>
                                 <p className="text-white font-mono">{stream.profile}</p>
                               </div>
                             )}
                             {stream.level && (
                               <div>
-                                <p className="text-xs text-gray-500 mb-1">Level</p>
+                                <div className="flex items-center gap-2">
+                                  <p className="text-xs text-gray-500 mb-1">Level</p>
+                                  <HelpTooltip content={WTF_HELP.streams.level} />
+                                </div>
                                 <p className="text-white font-mono">{stream.level}</p>
                               </div>
                             )}
@@ -992,7 +1088,10 @@ export default function FileAnalysisPage() {
                             <div className="space-y-2">
                               {stream.width && stream.height && (
                                 <div>
-                                  <p className="text-xs text-gray-500 mb-1">Resolution</p>
+                                  <div className="flex items-center gap-2">
+                                    <p className="text-xs text-gray-500 mb-1">Resolution</p>
+                                    <HelpTooltip content={WTF_HELP.streams.resolution} />
+                                  </div>
                                   <p className="text-white font-mono text-lg">
                                     {stream.width} × {stream.height}
                                   </p>
@@ -1000,7 +1099,10 @@ export default function FileAnalysisPage() {
                               )}
                               {stream.r_frame_rate && (
                                 <div>
-                                  <p className="text-xs text-gray-500 mb-1">Frame Rate</p>
+                                  <div className="flex items-center gap-2">
+                                    <p className="text-xs text-gray-500 mb-1">Frame Rate</p>
+                                    <HelpTooltip content={WTF_HELP.streams.framerate} />
+                                  </div>
                                   <p className="text-white font-mono">{stream.r_frame_rate}</p>
                                 </div>
                               )}
@@ -1119,7 +1221,9 @@ export default function FileAnalysisPage() {
 
           {/* Frames Tab - Phase 3 Implementation */}
           <TabsContent value="frames" className="space-y-6">
-            {!videoStream ? (
+            {loadingFrames ? (
+              <FramesSkeleton />
+            ) : !videoStream ? (
               <Card className="bg-gradient-to-br from-yellow-600/20 to-orange-600/20 backdrop-blur-lg border-yellow-500/30">
                 <CardContent className="p-6 text-center">
                   <p className="text-gray-300 mb-4">No video stream found</p>
@@ -1712,7 +1816,9 @@ export default function FileAnalysisPage() {
 
           {/* Codec Tab */}
           <TabsContent value="codec" className="space-y-6">
-            {!probeData ? (
+            {loading && !probeData ? (
+              <CodecSkeleton />
+            ) : !probeData ? (
               <Card className="bg-gradient-to-br from-yellow-600/20 to-orange-600/20 backdrop-blur-lg border-yellow-500/30">
                 <CardContent className="p-6 text-center">
                   <p className="text-gray-300 mb-4">No codec data available</p>
@@ -1791,7 +1897,9 @@ export default function FileAnalysisPage() {
 
           {/* Packets Tab - Phase 4 Implementation */}
           <TabsContent value="packets" className="space-y-6">
-            {packetsData.length === 0 ? (
+            {loadingPackets ? (
+              <PacketsSkeleton />
+            ) : packetsData.length === 0 ? (
               <Card className="bg-gradient-to-br from-yellow-600/20 to-orange-600/20 backdrop-blur-lg border-yellow-500/30">
                 <CardContent className="p-6 text-center">
                   <p className="text-gray-300 mb-4">Packet data not loaded</p>
@@ -2042,7 +2150,9 @@ export default function FileAnalysisPage() {
 
           {/* Bitstream Tab */}
           <TabsContent value="bitstream" className="space-y-6">
-            {!videoStream ? (
+            {loadingBitstream ? (
+              <BitstreamSkeleton />
+            ) : !videoStream ? (
               <Card className="bg-gradient-to-br from-yellow-600/20 to-orange-600/20 backdrop-blur-lg border-yellow-500/30">
                 <CardContent className="p-6 text-center">
                   <p className="text-gray-300 mb-4">No video stream found</p>
@@ -2350,5 +2460,13 @@ export default function FileAnalysisPage() {
         </Tabs>
       </div>
     </div>
+  );
+}
+
+export default function FileAnalysisPageWithErrorBoundary() {
+  return (
+    <ErrorBoundary>
+      <FileAnalysisPage />
+    </ErrorBoundary>
   );
 }
