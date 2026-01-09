@@ -11,6 +11,7 @@ import { ffprobeModule } from './modules/ffprobe';
 import { ffplayModule } from './modules/ffplay';
 import { commonUseCasesModule } from './modules/common-use-cases';
 import { advancedFiltersModule } from './modules/advanced-filters';
+import { optimizationPerformanceModule } from './modules/optimization-performance';
 
 // Export all modules
 export const modules = [
@@ -21,10 +22,11 @@ export const modules = [
   ffplayModule,
   commonUseCasesModule,
   advancedFiltersModule,
+  optimizationPerformanceModule,
 ];
 
 // Flatten all lessons into a single array
 export const lessons: Lesson[] = modules.flatMap(module => module.lessons);
 
 // Export modules individually for convenience
-export { fundamentalsModule, videoProcessingModule, audioProcessingModule, ffprobeModule, ffplayModule, commonUseCasesModule, advancedFiltersModule };
+export { fundamentalsModule, videoProcessingModule, audioProcessingModule, ffprobeModule, ffplayModule, commonUseCasesModule, advancedFiltersModule, optimizationPerformanceModule };
