@@ -13,6 +13,23 @@ export const introductionToFFprobe: Lesson = {
       content: 'FFprobe is FFmpeg\'s analysis tool for inspecting media files. Unlike FFmpeg, FFprobe does not modify files - it only reads metadata and technical information. This makes it perfect for debugging, automation, metadata extraction, and media validation.'
     },
     {
+      type: 'diagram',
+      title: 'FFProbe Analysis Flow',
+      diagram: `flowchart LR
+    Input[Input File] --> FFProbe[FFProbe]
+    FFProbe --> Extract[Extract Information]
+    Extract --> Metadata[Metadata<br/>Format, Duration, Size]
+    Extract --> Streams[Stream Info<br/>Codecs, Bitrates, Resolution]
+    Extract --> Frames[Frame Analysis<br/>Timestamps, Properties]
+    Metadata --> Output[Output Info<br/>Read-Only]
+    Streams --> Output
+    Frames --> Output
+    Output --> NoMod[No File Modification]`,
+      explanation: 'FFProbe analysis flow: Input file is read by FFProbe, which extracts metadata, stream information, and frame data. All information is output as text/JSON without modifying the original file.',
+      diagramType: 'mermaid',
+      diagramFormat: 'flowchart'
+    },
+    {
       type: 'code',
       command: 'ffprobe input.mp4',
       explanation: 'Basic FFprobe usage. This displays basic information about the media file including streams, codecs, duration, and bitrate.',

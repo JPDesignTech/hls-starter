@@ -24,6 +24,18 @@ export const videoCodecs: Lesson = {
 Use the \`-c:v\` (or \`-vcodec\`) flag to specify the video codec.`
     },
     {
+      type: 'diagram',
+      title: 'Video Encoding Process',
+      diagram: `flowchart LR
+    RawVideo[Raw Video Frames] --> Encoder[Video Encoder<br/>libx264/libx265]
+    Encoder --> Compress[Compress Frames]
+    Compress --> Encode[Encode to Codec]
+    Encode --> Container[Add to Container]`,
+      explanation: 'Video encoding process: raw frames are compressed and encoded using a codec (like H.264 or H.265), then packaged into a container format.',
+      diagramType: 'mermaid',
+      diagramFormat: 'flowchart'
+    },
+    {
       type: 'code',
       command: 'ffmpeg -i input.mp4 -c:v libx264 output.mp4',
       explanation: 'Convert video using H.264 codec',

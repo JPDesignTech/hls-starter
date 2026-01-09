@@ -13,6 +13,84 @@ export const audioMixingAndMerging: Lesson = {
       content: 'Combining multiple audio tracks is essential for music production, podcast creation, and sound design. FFmpeg\'s amix filter allows you to merge multiple audio streams, and you can control the volume balance of each track before mixing.'
     },
     {
+      type: 'diagram',
+      title: 'Audio Mixing Flow',
+      diagram: '',
+      explanation: 'Audio mixing process: Multiple input streams flow through volume adjustment filters, then combine in the amix filter to create a single mixed output stream.',
+      diagramType: 'react-flow',
+      reactFlowData: {
+        nodes: [
+          {
+            id: 'input1',
+            label: 'Input 1\nvoice.wav',
+            position: { x: 0, y: 0 },
+            type: 'input'
+          },
+          {
+            id: 'input2',
+            label: 'Input 2\nmusic.wav',
+            position: { x: 0, y: 150 },
+            type: 'input'
+          },
+          {
+            id: 'volume1',
+            label: 'Volume Filter\nvolume=1.0',
+            position: { x: 200, y: 0 },
+            type: 'default'
+          },
+          {
+            id: 'volume2',
+            label: 'Volume Filter\nvolume=0.4',
+            position: { x: 200, y: 150 },
+            type: 'default'
+          },
+          {
+            id: 'amix',
+            label: 'amix Filter\ninputs=2',
+            position: { x: 400, y: 75 },
+            type: 'default'
+          },
+          {
+            id: 'output',
+            label: 'Output\nmixed.wav',
+            position: { x: 600, y: 75 },
+            type: 'output'
+          }
+        ],
+        edges: [
+          {
+            id: 'e1',
+            source: 'input1',
+            target: 'volume1',
+            label: '[0:a]'
+          },
+          {
+            id: 'e2',
+            source: 'input2',
+            target: 'volume2',
+            label: '[1:a]'
+          },
+          {
+            id: 'e3',
+            source: 'volume1',
+            target: 'amix',
+            label: '[a0]'
+          },
+          {
+            id: 'e4',
+            source: 'volume2',
+            target: 'amix',
+            label: '[a1]'
+          },
+          {
+            id: 'e5',
+            source: 'amix',
+            target: 'output'
+          }
+        ]
+      }
+    },
+    {
       type: 'code',
       command: 'ffmpeg -i voice.wav -i music.wav -filter_complex amix=inputs=2 output.wav',
       explanation: 'Mix two audio files together. The amix filter combines multiple audio inputs into a single output.',

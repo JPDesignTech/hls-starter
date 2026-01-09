@@ -8,6 +8,7 @@ import { CodeExample } from './code-example';
 import { InteractiveChallenge } from './interactive-challenge';
 import { QuizComponent } from './quiz-component';
 import { InteractivePreview } from './interactive-preview';
+import { DiagramVisualizer } from './diagram-visualizer';
 import { completeLesson, setCurrentLesson } from '@/lib/tutorial-progress';
 
 interface LessonContentProps {
@@ -189,6 +190,20 @@ export function LessonContent({ lesson, onNext, onPrevious, hasNext, hasPrevious
               explanation={block.explanation}
               previewType={block.previewType}
               sampleVideoId={block.sampleVideoId}
+            />
+          </div>
+        );
+
+      case 'diagram':
+        return (
+          <div key={index}>
+            <DiagramVisualizer
+              diagram={block.diagram}
+              title={block.title}
+              explanation={block.explanation}
+              diagramType={block.diagramType}
+              diagramFormat={block.diagramFormat}
+              reactFlowData={block.reactFlowData}
             />
           </div>
         );

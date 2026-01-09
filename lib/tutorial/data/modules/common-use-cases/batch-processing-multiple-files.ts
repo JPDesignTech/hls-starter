@@ -13,6 +13,20 @@ export const batchProcessingMultipleFiles: Lesson = {
       content: 'Running FFmpeg on multiple files automatically is essential for automation, scripts, and CI/CD pipelines. Batch processing allows you to convert, process, or analyze many files without manual intervention.'
     },
     {
+      type: 'diagram',
+      title: 'Batch Processing Flow',
+      diagram: `flowchart LR
+    Files[File List<br/>*.mp4] --> Loop[Loop Through Files]
+    Loop --> Process[Process File<br/>FFmpeg Command]
+    Process --> Check{More Files?}
+    Check -->|Yes| Next[Next File]
+    Check -->|No| Complete[Complete]
+    Next --> Loop`,
+      explanation: 'Batch processing flow: A loop iterates through a list of files, processing each one with FFmpeg. The loop continues until all files are processed, enabling automated processing of entire directories.',
+      diagramType: 'mermaid',
+      diagramFormat: 'flowchart'
+    },
+    {
       type: 'code',
       command: 'for f in *.mp4; do ffmpeg -i "$f" "${f%.mp4}.webm"; done',
       explanation: 'Batch convert MP4 to WebM (Bash). Processes all MP4 files in current directory, converting each to WebM format.',

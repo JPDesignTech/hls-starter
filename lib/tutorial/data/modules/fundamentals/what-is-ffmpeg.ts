@@ -35,6 +35,26 @@ Understanding FFMPEG gives you:
 - Skills applicable to video editing, streaming, and media analysis`
     },
     {
+      type: 'diagram',
+      title: 'FFmpeg Architecture',
+      diagram: `graph TB
+    FFmpeg[FFmpeg Framework] --> FFmpegTool[ffmpeg Tool]
+    FFmpeg --> FFprobeTool[ffprobe Tool]
+    FFmpeg --> FFplayTool[ffplay Tool]
+    
+    FFmpegTool --> Encode[Encoding]
+    FFmpegTool --> Decode[Decoding]
+    FFmpegTool --> Filter[Filtering]
+    
+    FFprobeTool --> Analyze[Analysis]
+    FFprobeTool --> Metadata[Metadata Extraction]
+    
+    FFplayTool --> Playback[Playback]`,
+      explanation: 'FFmpeg consists of three main tools: ffmpeg for processing, ffprobe for analysis, and ffplay for playback.',
+      diagramType: 'mermaid',
+      diagramFormat: 'graph'
+    },
+    {
       type: 'code',
       command: 'ffmpeg -version',
       explanation: 'Check your FFMPEG installation and version information',

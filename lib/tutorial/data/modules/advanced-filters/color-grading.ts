@@ -24,6 +24,20 @@ export const colorGrading: Lesson = {
       ]
     },
     {
+      type: 'diagram',
+      title: 'Color Grading Pipeline',
+      diagram: `flowchart LR
+    Input[Input Video] --> Analyze[Color Analysis]
+    Analyze --> Method{Method}
+    Method -->|Basic| EQ[eq Filter<br/>contrast/brightness<br/>saturation/gamma]
+    Method -->|Professional| LUT[lut3d Filter<br/>3D Look-Up Table]
+    EQ --> Output[Output Video]
+    LUT --> Output`,
+      explanation: 'Color grading pipeline: Input video is analyzed, then color adjustments are applied using either the eq filter for basic adjustments (contrast, brightness, saturation, gamma) or the lut3d filter for professional LUT-based looks.',
+      diagramType: 'mermaid',
+      diagramFormat: 'flowchart'
+    },
+    {
       type: 'code',
       command: 'ffmpeg -i input.mp4 -vf "eq=contrast=1.2:brightness=0.05:saturation=1.3" output.mp4',
       explanation: 'Basic color adjustments: increase contrast by 20%, add slight brightness boost, increase saturation by 30%.',

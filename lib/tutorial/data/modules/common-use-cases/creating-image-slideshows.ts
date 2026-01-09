@@ -13,6 +13,21 @@ export const creatingImageSlideshows: Lesson = {
       content: 'Turning images into a video slideshow is perfect for presentations, photo albums, and social media content. FFmpeg can combine multiple images into a single video with customizable timing.'
     },
     {
+      type: 'diagram',
+      title: 'Slideshow Creation Process',
+      diagram: `flowchart LR
+    Images[Image Sequence<br/>img_001.jpg, img_002.jpg...] --> Sequence[Sequence Images]
+    Sequence --> Framerate[Set Framerate<br/>-framerate 1]
+    Framerate --> Encode[Encode Video<br/>libx264]
+    Encode --> Audio{Add Audio?}
+    Audio -->|Yes| Mix[Mix Audio<br/>-shortest]
+    Audio -->|No| Output[Output Video]
+    Mix --> Output`,
+      explanation: 'Slideshow creation process: Sequentially named images are loaded, framerate is set to control display duration, video is encoded, and optionally audio is mixed in. The -shortest flag ensures video and audio stay in sync.',
+      diagramType: 'mermaid',
+      diagramFormat: 'flowchart'
+    },
+    {
       type: 'code',
       command: 'ffmpeg -framerate 1 -i img_%03d.jpg output.mp4',
       explanation: 'Basic slideshow with 1 image per second. Images must be sequentially named (img_001.jpg, img_002.jpg, etc.).',

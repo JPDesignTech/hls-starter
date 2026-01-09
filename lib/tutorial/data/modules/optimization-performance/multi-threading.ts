@@ -78,6 +78,24 @@ export const multiThreading: Lesson = {
       ]
     },
     {
+      type: 'diagram',
+      title: 'Multi-Threading Architecture',
+      diagram: `graph TB
+    Input[Input Video] --> Split[Split Work]
+    Split --> Thread1[Thread 1<br/>Core 1]
+    Split --> Thread2[Thread 2<br/>Core 2]
+    Split --> Thread3[Thread 3<br/>Core 3]
+    Split --> Thread4[Thread 4<br/>Core 4]
+    Thread1 --> Combine[Combine Results]
+    Thread2 --> Combine
+    Thread3 --> Combine
+    Thread4 --> Combine
+    Combine --> Output[Output Video]`,
+      explanation: 'Multi-threading architecture: Input video work is split across multiple CPU cores/threads, each processing frames in parallel. Results are then combined to create the final output, significantly speeding up encoding on multi-core systems.',
+      diagramType: 'mermaid',
+      diagramFormat: 'graph'
+    },
+    {
       type: 'bullets',
       heading: 'Thread Control Guidelines',
       content: 'Understanding thread settings:',

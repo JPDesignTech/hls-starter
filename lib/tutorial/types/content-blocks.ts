@@ -3,6 +3,8 @@
  * Each block represents a different type of content that can appear in a lesson
  */
 
+import * as React from 'react';
+
 export interface TextBlock {
   type: 'text';
   content: string; // Markdown or HTML content
@@ -67,6 +69,32 @@ export interface PreviewBlock {
   sampleVideoId: string;
 }
 
+export interface DiagramBlock {
+  type: 'diagram';
+  title?: string;
+  diagram: string; // Diagram definition (Mermaid syntax or React Flow JSON)
+  explanation?: string;
+  diagramType?: 'mermaid' | 'react-flow' | 'auto';
+  diagramFormat?: 'flowchart' | 'graph' | 'sequenceDiagram' | 'filter-graph' | 'custom';
+  // Optional React Flow data structure
+  reactFlowData?: {
+    nodes: Array<{
+      id: string;
+      label: string;
+      type?: string;
+      position: { x: number; y: number };
+      style?: React.CSSProperties;
+    }>;
+    edges: Array<{
+      id: string;
+      source: string;
+      target: string;
+      label?: string;
+      style?: React.CSSProperties;
+    }>;
+  };
+}
+
 export type ContentBlock =
   | TextBlock
   | CodeBlock
@@ -74,4 +102,5 @@ export type ContentBlock =
   | QuizBlock
   | IntroductionBlock
   | BulletsBlock
-  | PreviewBlock;
+  | PreviewBlock
+  | DiagramBlock;

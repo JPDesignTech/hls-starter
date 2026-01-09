@@ -13,6 +13,19 @@ export const commandStructureFlags: Lesson = {
       content: 'An FFmpeg command follows a general structure: ffmpeg [global_options] -i <input1> [-i <input2> ...] [output_options] <output1> [output_options] <output2> .... The order matters – you list all inputs first, then outputs.'
     },
     {
+      type: 'diagram',
+      title: 'Command Structure Flow',
+      diagram: `flowchart LR
+    Start[ffmpeg] --> Global[Global Options]
+    Global --> Input1[Input 1 -i]
+    Input1 --> Input2[Input 2 -i]
+    Input2 --> OutputOpts[Output Options]
+    OutputOpts --> Output[Output File]`,
+      explanation: 'FFmpeg command structure: start with ffmpeg, add global options, list all inputs with -i, add output options, then specify output file.',
+      diagramType: 'mermaid',
+      diagramFormat: 'flowchart'
+    },
+    {
       type: 'code',
       command: 'ffmpeg -i input.avi -b:v 1M -r 24 output.mp4',
       explanation: 'Example showing the command structure: input file, output options (bitrate and frame rate), then output file.',
