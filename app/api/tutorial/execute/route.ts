@@ -156,22 +156,26 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Generate output path
-    const outputVideoPath = path.join(tempDir, `output_${Date.now()}.mp4`);
-    tempFiles.push(outputVideoPath);
-
     // Parse and execute command
     const commandParts = parseCommand(command, inputVideoPath);
     
+    // Detect output format from command (check for audio-only flags or output extension)
+    const isAudioOnly = command.includes('-vn') || command.includes('-an');
+    const outputExtension = command.match(/output\.(\w+)/)?.[1] || 'mp4';
+    
+    // Generate output path with appropriate extension
+    const outputFilePath = path.join(tempDir, `output_${Date.now()}.${outputExtension}`);
+    tempFiles.push(outputFilePath);
+
     // Replace output filename in command
     const outputIndex = commandParts.findIndex((part, idx) => 
       idx > 0 && !part.startsWith('-') && commandParts[idx - 1] !== '-i'
     );
     
     if (outputIndex !== -1) {
-      commandParts[outputIndex] = outputVideoPath;
+      commandParts[outputIndex] = outputFilePath;
     } else {
-      commandParts.push(outputVideoPath);
+      commandParts.push(outputFilePath);
     }
 
     const startTime = Date.now();
@@ -185,15 +189,15 @@ export async function POST(request: NextRequest) {
     const executionTime = (Date.now() - startTime) / 1000;
 
     // Check if output file was created
-    if (!await fs.access(outputVideoPath).then(() => true).catch(() => false)) {
+    if (!await fs.access(outputFilePath).then(() => true).catch(() => false)) {
       throw new Error('FFMPEG command did not produce output file');
     }
 
     // Get file sizes
     const inputStats = await fs.stat(inputVideoPath);
-    const outputStats = await fs.stat(outputVideoPath);
+    const outputStats = await fs.stat(outputFilePath);
 
-    // Get video dimensions using ffprobe
+    // Get video/audio dimensions using ffprobe
     let originalDimensions = { width: 1920, height: 1080 };
     let processedDimensions = { width: 1920, height: 1080 };
 
@@ -207,13 +211,15 @@ export async function POST(request: NextRequest) {
           width: videoStream.width || 1920,
           height: videoStream.height || 1080,
         };
+      } else if (isAudioOnly) {
+        originalDimensions = { width: 0, height: 0 };
       }
     } catch (error) {
-      console.warn('Failed to probe original video:', error);
+      console.warn('Failed to probe original file:', error);
     }
 
     try {
-      const probeCmd = `ffprobe -v quiet -print_format json -show_streams "${outputVideoPath}"`;
+      const probeCmd = `ffprobe -v quiet -print_format json -show_streams "${outputFilePath}"`;
       const { stdout: probeStdout } = await execAsync(probeCmd);
       const probeData = JSON.parse(probeStdout);
       const videoStream = probeData.streams?.find((s: any) => s.codec_type === 'video');
@@ -222,17 +228,31 @@ export async function POST(request: NextRequest) {
           width: videoStream.width || 1920,
           height: videoStream.height || 1080,
         };
+      } else if (isAudioOnly) {
+        processedDimensions = { width: 0, height: 0 };
       }
     } catch (error) {
-      console.warn('Failed to probe processed video:', error);
+      console.warn('Failed to probe processed file:', error);
     }
 
-    // Upload processed video to storage
-    const outputFilename = `tutorial-output/${Date.now()}_${path.basename(outputVideoPath)}`;
+    // Determine content type based on output extension
+    const contentTypeMap: Record<string, string> = {
+      'mp4': 'video/mp4',
+      'mp3': 'audio/mpeg',
+      'wav': 'audio/wav',
+      'aac': 'audio/aac',
+      'm4a': 'audio/mp4',
+      'ogg': 'audio/ogg',
+      'flac': 'audio/flac',
+    };
+    const contentType = contentTypeMap[outputExtension] || 'application/octet-stream';
+
+    // Upload processed file to storage
+    const outputFilename = `tutorial-output/${Date.now()}_${path.basename(outputFilePath)}`;
     const uploadedFile = await uploadFile({
-      localPath: outputVideoPath,
+      localPath: outputFilePath,
       remotePath: outputFilename,
-      contentType: 'video/mp4',
+      contentType,
       cacheControl: 'public, max-age=3600',
     });
 

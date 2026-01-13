@@ -7,6 +7,7 @@ import { encodingSpeedVsQuality } from './encoding-speed-vs-quality';
 import { preProcessingOptimization } from './pre-processing-optimization';
 import { memoryUsageControl } from './memory-usage-control';
 import { cpuVsGpuEncoding } from './cpu-vs-gpu-encoding';
+import { optimizationPerformanceQuiz } from './quiz';
 
 export const optimizationPerformanceModule: Module = {
   id: 'optimization-performance',
@@ -21,5 +22,6 @@ export const optimizationPerformanceModule: Module = {
     preProcessingOptimization,
     memoryUsageControl,
     cpuVsGpuEncoding,
-  ]
+  ],
+  quiz: optimizationPerformanceQuiz
 };

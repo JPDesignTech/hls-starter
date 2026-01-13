@@ -15,6 +15,7 @@ import { chromaKeying } from './chroma-keying';
 import { motionDetection } from './motion-detection';
 import { videoOverlays } from './video-overlays';
 import { addingWatermarks } from './adding-watermarks';
+import { videoProcessingQuiz } from './quiz';
 
 export const videoProcessingModule: Module = {
   id: 'video-processing',
@@ -37,5 +38,6 @@ export const videoProcessingModule: Module = {
     motionDetection,
     videoOverlays,
     addingWatermarks,
-  ]
+  ],
+  quiz: videoProcessingQuiz,
 };

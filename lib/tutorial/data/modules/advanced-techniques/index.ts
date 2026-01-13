@@ -11,6 +11,7 @@ import { performanceProfiling } from './performance-profiling';
 import { advancedMuxingDemuxing } from './advanced-muxing-demuxing';
 import { formatSpecificOptions } from './format-specific-options';
 import { hardwareDecodingEncodingDetailed } from './hardware-decoding-encoding-detailed';
+import { advancedTechniquesQuiz } from './quiz';
 
 export const advancedTechniquesModule: Module = {
   id: 'advanced-techniques',
@@ -29,5 +30,6 @@ export const advancedTechniquesModule: Module = {
     advancedMuxingDemuxing,
     formatSpecificOptions,
     hardwareDecodingEncodingDetailed,
-  ]
+  ],
+  quiz: advancedTechniquesQuiz
 };

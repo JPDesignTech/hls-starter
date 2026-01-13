@@ -5,6 +5,7 @@ import { inputOutput } from './input-output';
 import { basicFormatConversion } from './basic-format-conversion';
 import { containersVsCodecs } from './containers-vs-codecs';
 import { commandStructureFlags } from './command-structure-flags';
+import { fundamentalsQuiz } from './quiz';
 
 export const fundamentalsModule: Module = {
   id: 'fundamentals',
@@ -17,5 +18,6 @@ export const fundamentalsModule: Module = {
     basicFormatConversion,
     containersVsCodecs,
     commandStructureFlags,
-  ]
+  ],
+  quiz: fundamentalsQuiz,
 };
