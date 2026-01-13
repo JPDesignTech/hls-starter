@@ -91,7 +91,9 @@ export async function POST(request: NextRequest) {
     // Extract pagination parameters
     const page = options.page ?? 0;
     const pageSize = options.pageSize ?? 100;
-    const needsPagination = (options.showFrames ?? options.showPackets) && (page !== undefined ?? pageSize !== undefined);
+    const needsPagination =
+      (options.showFrames ?? options.showPackets) &&
+      (options.page !== undefined || options.pageSize !== undefined);
 
     // Create cache key (without pagination params for full data cache)
     const cacheOptions = { ...options };

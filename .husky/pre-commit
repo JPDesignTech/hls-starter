@@ -1,20 +1,5 @@
 #!/usr/bin/env sh
-. "$(dirname -- "$0")/_/husky.sh"
 
-echo "Running pre-commit checks with Turborepo..."
-
-# Check formatting (cached by Turbo)
-turbo run format:check
-if [ $? -ne 0 ]; then
-  echo "❌ Code formatting check failed. Run 'pnpm format:write' to fix."
-  exit 1
-fi
-
-# Run linter (cached by Turbo)
-turbo run lint
-if [ $? -ne 0 ]; then
-  echo "❌ Linting failed. Please fix the errors."
-  exit 1
-fi
-
-echo "✅ Pre-commit checks passed! (powered by Turborepo ⚡)"
+# Run our custom pre-commit checks
+echo "🚀 Running HLS Starter pre-commit checks..."
+./scripts/pre-commit-check.sh

@@ -1,11 +1,11 @@
 'use client';
 
 import * as React from 'react';
-import Link from 'next/link';
+import { Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { CommandBuilder } from '@/components/ffmpeg/command-builder';
 
-export default function FFMPEGCommandBuilderPage() {
+function CommandBuilderContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const initialCommand = searchParams.get('command') ?? '';
@@ -20,10 +20,32 @@ export default function FFMPEGCommandBuilderPage() {
       {/* Override purple background with teal/cyan theme */}
       <div className="fixed inset-0 bg-gradient-to-br from-gray-900 via-teal-900 to-cyan-900 animate-gradient -z-10" />
       <div className="fixed inset-0 bg-gradient-to-t from-black/50 via-transparent to-transparent pointer-events-none -z-10" />
-      
+
       <div className="relative z-0">
-        <CommandBuilder onBack={handleBack} initialCommand={initialCommand} returnTo={returnTo} />
+        <CommandBuilder
+          onBack={handleBack}
+          initialCommand={initialCommand}
+          returnTo={returnTo}
+        />
       </div>
     </div>
+  );
+}
+
+export default function FFMPEGCommandBuilderPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="min-h-screen relative">
+          <div className="fixed inset-0 bg-gradient-to-br from-gray-900 via-teal-900 to-cyan-900 animate-gradient -z-10" />
+          <div className="fixed inset-0 bg-gradient-to-t from-black/50 via-transparent to-transparent pointer-events-none -z-10" />
+          <div className="flex items-center justify-center min-h-screen">
+            <div className="text-white">Loading...</div>
+          </div>
+        </div>
+      }
+    >
+      <CommandBuilderContent />
+    </Suspense>
   );
 }

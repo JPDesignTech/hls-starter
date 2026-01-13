@@ -1,6 +1,7 @@
 'use client';
 
 import * as React from 'react';
+import { Suspense } from 'react';
 import { Menu, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { TutorialSidebar } from '@/components/tutorial/tutorial-sidebar';
@@ -9,7 +10,7 @@ import { lessons, getLessonById } from '@/lib/tutorial';
 import { setCurrentLesson, isLessonUnlocked } from '@/lib/tutorial-progress';
 import { useSearchParams, useRouter } from 'next/navigation';
 
-export default function LearnPage() {
+function LearnPageContent() {
   const [sidebarOpen, setSidebarOpen] = React.useState(false);
   const [currentLessonId, setCurrentLessonId] = React.useState<string | null>(null);
   const searchParams = useSearchParams();
@@ -123,5 +124,22 @@ export default function LearnPage() {
         </div>
       </div>
     </div>
+  );
+}
+
+export default function LearnPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen bg-gradient-to-br from-purple-900 via-purple-800 to-purple-900">
+        <div className="flex items-center justify-center min-h-screen">
+          <div className="text-center">
+            <h2 className="text-white text-2xl font-bold mb-4">Loading...</h2>
+            <p className="text-gray-400">Preparing your learning experience</p>
+          </div>
+        </div>
+      </div>
+    }>
+      <LearnPageContent />
+    </Suspense>
   );
 }
