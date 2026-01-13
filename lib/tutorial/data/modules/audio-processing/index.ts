@@ -9,6 +9,7 @@ import { audioMixingAndMerging } from './audio-mixing-and-merging';
 import { removingAudioFromVideo } from './removing-audio-from-video';
 import { audioFadeInFadeOut } from './audio-fade-in-fade-out';
 import { changingAudioSpeedPitch } from './changing-audio-speed-pitch';
+import { audioProcessingQuiz } from './quiz';
 
 export const audioProcessingModule: Module = {
   id: 'audio-processing',
@@ -25,5 +26,6 @@ export const audioProcessingModule: Module = {
     removingAudioFromVideo,
     audioFadeInFadeOut,
     changingAudioSpeedPitch,
-  ]
+  ],
+  quiz: audioProcessingQuiz,
 };

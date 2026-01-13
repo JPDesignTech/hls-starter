@@ -13,6 +13,7 @@ import { convertingVideosForWeb } from './converting-videos-for-web';
 import { optimizingVideoFileSizes } from './optimizing-video-file-sizes';
 import { creatingSquarePortraitVideos } from './creating-square-portrait-videos';
 import { addingTextOverlays } from './adding-text-overlays';
+import { commonUseCasesQuiz } from './quiz';
 
 export const commonUseCasesModule: Module = {
   id: 'common-use-cases',
@@ -33,5 +34,6 @@ export const commonUseCasesModule: Module = {
     optimizingVideoFileSizes,
     creatingSquarePortraitVideos,
     addingTextOverlays,
-  ]
+  ],
+  quiz: commonUseCasesQuiz,
 };

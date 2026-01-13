@@ -2,8 +2,8 @@
  * Query utilities for tutorial lessons
  */
 
-import { Lesson } from '../types';
-import { lessons } from '../data';
+import { Lesson, Module } from '../types';
+import { lessons, modules } from '../data';
 
 /**
  * Get a lesson by its ID
@@ -24,6 +24,13 @@ export function getLessonsByModule(module: string): Lesson[] {
  */
 export function getModules(): string[] {
   return Array.from(new Set(lessons.map(lesson => lesson.module)));
+}
+
+/**
+ * Get a module by its ID
+ */
+export function getModuleById(id: string): Module | undefined {
+  return modules.find(module => module.id === id);
 }
 
 /**

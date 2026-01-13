@@ -12,6 +12,7 @@ import { videoStreamAnalysis } from './video-stream-analysis';
 import { jsonOutputFormatting } from './json-output-formatting';
 import { extractingSpecificMetadataFields } from './extracting-specific-metadata-fields';
 import { frameTimestampAnalysis } from './frame-timestamp-analysis';
+import { ffprobeQuiz } from './quiz';
 
 export const ffprobeModule: Module = {
   id: 'ffprobe',
@@ -31,5 +32,6 @@ export const ffprobeModule: Module = {
     jsonOutputFormatting,
     extractingSpecificMetadataFields,
     frameTimestampAnalysis,
-  ]
+  ],
+  quiz: ffprobeQuiz,
 };

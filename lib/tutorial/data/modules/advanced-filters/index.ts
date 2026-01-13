@@ -10,6 +10,7 @@ import { deinterlacing } from './deinterlacing';
 import { transitionsBetweenClips } from './transitions-between-clips';
 import { advancedScalingOptions } from './advanced-scaling-options';
 import { histogramAnalysis } from './histogram-analysis';
+import { advancedFiltersQuiz } from './quiz';
 
 export const advancedFiltersModule: Module = {
   id: 'advanced-filters',
@@ -27,5 +28,6 @@ export const advancedFiltersModule: Module = {
     transitionsBetweenClips,
     advancedScalingOptions,
     histogramAnalysis,
-  ]
+  ],
+  quiz: advancedFiltersQuiz,
 };

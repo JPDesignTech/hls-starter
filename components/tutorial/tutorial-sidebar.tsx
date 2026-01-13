@@ -1,10 +1,12 @@
 'use client';
 
 import * as React from 'react';
-import { CheckCircle, Lock, Circle, ChevronDown, ChevronRight } from 'lucide-react';
+import { CheckCircle, Lock, Circle, ChevronDown, ChevronRight, Trophy, HelpCircle } from 'lucide-react';
 import { lessons, getModules, getLessonsByModule } from '@/lib/tutorial';
-import { getProgress, isLessonCompleted, isLessonUnlocked, TutorialProgress } from '@/lib/tutorial-progress';
+import { modules } from '@/lib/tutorial/data';
+import { getProgress, isLessonCompleted, isLessonUnlocked, TutorialProgress, areAllModuleLessonsCompleted, getModuleQuizScore, isModuleQuizCompleted } from '@/lib/tutorial-progress';
 import { getOverallProgress } from '@/lib/tutorial-progress';
+import { getModuleById } from '@/lib/tutorial/utils/queries';
 import Link from 'next/link';
 
 interface TutorialSidebarProps {
@@ -35,8 +37,6 @@ export function TutorialSidebar({ currentLessonId }: TutorialSidebarProps) {
     const interval = setInterval(loadProgress, 1000);
     return () => clearInterval(interval);
   }, []);
-
-  const modules = getModules();
 
   const toggleModule = (module: string) => {
     setExpandedModules(prev => {
@@ -93,9 +93,9 @@ export function TutorialSidebar({ currentLessonId }: TutorialSidebarProps) {
 
         {/* Lesson Categories */}
         <div className="space-y-2">
-          {modules.map((module) => {
-            const moduleLessons = getLessonsByModule(module);
-            const isExpanded = expandedModules.has(module);
+          {modules.map((moduleObj) => {
+            const moduleLessons = getLessonsByModule(moduleObj.title);
+            const isExpanded = expandedModules.has(moduleObj.title);
             // Only calculate completed count after mount to avoid hydration mismatch
             const completedCount = isMounted 
               ? moduleLessons.filter(l => isLessonCompleted(l.id)).length 
@@ -103,9 +103,9 @@ export function TutorialSidebar({ currentLessonId }: TutorialSidebarProps) {
             const progressText = `${completedCount}/${moduleLessons.length}`;
 
             return (
-              <div key={module}>
+              <div key={moduleObj.id}>
                 <button
-                  onClick={() => toggleModule(module)}
+                  onClick={() => toggleModule(moduleObj.title)}
                   className="w-full flex items-center justify-between p-3 rounded-lg hover:bg-purple-900/30 transition-colors"
                 >
                   <div className="flex items-center gap-2">
@@ -114,7 +114,7 @@ export function TutorialSidebar({ currentLessonId }: TutorialSidebarProps) {
                     ) : (
                       <ChevronRight className="w-4 h-4 text-purple-400" />
                     )}
-                    <span className="text-white">{module}</span>
+                    <span className="text-white">{moduleObj.title}</span>
                   </div>
                   <span className="text-white/40 text-sm">{progressText}</span>
                 </button>
@@ -129,7 +129,6 @@ export function TutorialSidebar({ currentLessonId }: TutorialSidebarProps) {
                         <Link
                           key={lesson.id}
                           href={`/learn?lesson=${lesson.id}`}
-                          disabled={status === 'locked'}
                           className={`w-full flex items-center gap-2 p-2 rounded-lg transition-colors text-left ${
                             isCurrent
                               ? "bg-purple-700/30 border border-purple-500/50"
@@ -159,6 +158,71 @@ export function TutorialSidebar({ currentLessonId }: TutorialSidebarProps) {
                         </Link>
                       );
                     })}
+                    
+                    {/* Module Quiz */}
+                    {(() => {
+                      if (!moduleObj.quiz) return null;
+                      
+                      const lessonIds = moduleObj.lessons.map((l) => l.id);
+                      const allLessonsCompleted = isMounted && areAllModuleLessonsCompleted(lessonIds);
+                      const quizScore = isMounted ? getModuleQuizScore(moduleObj.id) : null;
+                      const quizPassed = quizScore && isModuleQuizCompleted(moduleObj.id, moduleObj.quiz.passingScore);
+                      const isPerfect = quizScore?.score === 100;
+                      const isQuizCurrent = typeof window !== 'undefined' && window.location.pathname.includes(`/learn/${moduleObj.id}/quiz`);
+                      
+                      return (
+                        <>
+                          <div className="my-2 border-t border-purple-700/30"></div>
+                          <Link
+                            href={`/learn/${moduleObj.id}/quiz`}
+                            className={`w-full flex items-center gap-2 p-2 rounded-lg transition-colors text-left ${
+                              isQuizCurrent
+                                ? "bg-purple-700/30 border border-purple-500/50"
+                                : !allLessonsCompleted
+                                ? "opacity-50 cursor-not-allowed"
+                                : "hover:bg-purple-900/30"
+                            }`}
+                            onClick={(e) => {
+                              if (!allLessonsCompleted) {
+                                e.preventDefault();
+                              }
+                            }}
+                          >
+                            {!allLessonsCompleted ? (
+                              <Lock className="w-4 h-4 text-white/40 flex-shrink-0" />
+                            ) : quizPassed ? (
+                              isPerfect ? (
+                                <Trophy className="w-4 h-4 text-yellow-400 flex-shrink-0" />
+                              ) : (
+                                <CheckCircle className="w-4 h-4 text-green-400 flex-shrink-0" />
+                              )
+                            ) : (
+                              <HelpCircle className="w-4 h-4 text-purple-400 flex-shrink-0" />
+                            )}
+                            <div className="flex-1 min-w-0">
+                              <div className="text-white text-sm truncate">Module Quiz</div>
+                              <div className="text-white/40 text-xs">
+                                {quizScore 
+                                  ? `${quizScore.score}%${quizScore.bestScore !== quizScore.score ? ` (Best: ${quizScore.bestScore}%)` : ''}`
+                                  : `${moduleObj.quiz.questions.length} questions`
+                                }
+                              </div>
+                            </div>
+                            {quizPassed && (
+                              <div className="flex-shrink-0">
+                                <div className={`px-2 py-0.5 rounded text-xs font-medium ${
+                                  isPerfect
+                                    ? 'bg-yellow-500/20 text-yellow-300'
+                                    : 'bg-green-500/20 text-green-300'
+                                }`}>
+                                  {isPerfect ? 'Perfect' : 'Passed'}
+                                </div>
+                              </div>
+                            )}
+                          </Link>
+                        </>
+                      );
+                    })()}
                   </div>
                 )}
               </div>

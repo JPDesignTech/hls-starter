@@ -10,6 +10,7 @@ import { audioChannelSelection } from './audio-channel-selection';
 import { subtitleDisplay } from './subtitle-display';
 import { lowLatencyStreamingPlayback } from './low-latency-streaming-playback';
 import { testingStreams } from './testing-streams';
+import { ffplayQuiz } from './quiz';
 
 export const ffplayModule: Module = {
   id: 'ffplay',
@@ -27,5 +28,6 @@ export const ffplayModule: Module = {
     subtitleDisplay,
     lowLatencyStreamingPlayback,
     testingStreams,
-  ]
+  ],
+  quiz: ffplayQuiz,
 };

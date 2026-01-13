@@ -11,9 +11,10 @@ interface QuizComponentProps {
   block: QuizBlock;
   lessonId: string;
   onComplete?: () => void;
+  onAnswer?: (selectedOptionId: string, isCorrect: boolean) => void;
 }
 
-export function QuizComponent({ block, lessonId, onComplete }: QuizComponentProps) {
+export function QuizComponent({ block, lessonId, onComplete, onAnswer }: QuizComponentProps) {
   const [selectedOption, setSelectedOption] = React.useState<string | null>(null);
   const [isChecked, setIsChecked] = React.useState(false);
   const [showExplanation, setShowExplanation] = React.useState(false);
@@ -30,6 +31,11 @@ export function QuizComponent({ block, lessonId, onComplete }: QuizComponentProp
     // Calculate score (100% if correct, 0% if incorrect)
     const score = isCorrect ? 100 : 0;
     recordQuizScore(lessonId, score);
+    
+    // Notify parent of answer (for quiz context)
+    if (onAnswer) {
+      onAnswer(selectedOption, isCorrect);
+    }
     
     if (isCorrect && onComplete) {
       setTimeout(() => onComplete(), 1500);
