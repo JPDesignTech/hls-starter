@@ -94,6 +94,18 @@ export const hardwareDecodingEncodingDetailed: Lesson = {
       ]
     },
     {
+      type: 'diagram',
+      title: 'Full GPU Pipeline',
+      diagram: `flowchart LR
+    Input[Input File] --> GPUDecode[GPU Decoder<br/>h264_cuvid]
+    GPUDecode --> GPUFilter[GPU Filter<br/>scale_cuda]
+    GPUFilter --> GPUEncode[GPU Encoder<br/>h264_nvenc]
+    GPUEncode --> Output[Output File]`,
+      explanation: 'Full GPU pipeline: Hardware decoder processes input, GPU filter scales/processes frames, hardware encoder creates output. Entire pipeline runs on GPU for maximum performance.',
+      diagramType: 'mermaid',
+      diagramFormat: 'flowchart'
+    },
+    {
       type: 'bullets',
       heading: 'Hardware Acceleration Backends',
       content: 'Platform-specific options:',

@@ -64,6 +64,101 @@ export const complexFilterGraphs: Lesson = {
       ]
     },
     {
+      type: 'diagram',
+      title: 'Filter Graph Structure',
+      diagram: '',
+      explanation: 'Filter graphs are Directed Acyclic Graphs (DAGs) where filters are nodes and streams flow through edges. This example shows splitting input, processing one branch (crop & flip), then overlaying. Filters can split streams, process them in parallel, and combine them.',
+      diagramType: 'react-flow',
+      reactFlowData: {
+        nodes: [
+          {
+            id: 'input',
+            label: 'Input Stream\ninput.mp4',
+            position: { x: 0, y: 100 },
+            type: 'input'
+          },
+          {
+            id: 'split',
+            label: 'split Filter\n[orig][tmp]',
+            position: { x: 200, y: 100 },
+            type: 'default'
+          },
+          {
+            id: 'orig',
+            label: 'Stream [orig]\nOriginal',
+            position: { x: 400, y: 0 },
+            type: 'default'
+          },
+          {
+            id: 'crop',
+            label: 'crop Filter\ncrop=iw:ih/2',
+            position: { x: 400, y: 150 },
+            type: 'default'
+          },
+          {
+            id: 'flip',
+            label: 'vflip Filter\nVertical Flip',
+            position: { x: 600, y: 150 },
+            type: 'default'
+          },
+          {
+            id: 'overlay',
+            label: 'overlay Filter\noverlay=0:H/2',
+            position: { x: 800, y: 50 },
+            type: 'default'
+          },
+          {
+            id: 'output',
+            label: 'Output Stream\noutput.mp4',
+            position: { x: 1000, y: 50 },
+            type: 'output'
+          }
+        ],
+        edges: [
+          {
+            id: 'e1',
+            source: 'input',
+            target: 'split'
+          },
+          {
+            id: 'e2',
+            source: 'split',
+            target: 'orig',
+            label: '[orig]'
+          },
+          {
+            id: 'e3',
+            source: 'split',
+            target: 'crop',
+            label: '[tmp]'
+          },
+          {
+            id: 'e4',
+            source: 'crop',
+            target: 'flip',
+            label: ''
+          },
+          {
+            id: 'e5',
+            source: 'flip',
+            target: 'overlay',
+            label: '[flip]'
+          },
+          {
+            id: 'e6',
+            source: 'orig',
+            target: 'overlay',
+            label: '[orig]'
+          },
+          {
+            id: 'e7',
+            source: 'overlay',
+            target: 'output'
+          }
+        ]
+      }
+    },
+    {
       type: 'bullets',
       heading: 'Filter Graph Concepts',
       content: 'Understanding filter graphs:',

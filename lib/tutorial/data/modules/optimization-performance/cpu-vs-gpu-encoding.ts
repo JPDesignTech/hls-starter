@@ -82,6 +82,27 @@ export const cpuVsGpuEncoding: Lesson = {
       ]
     },
     {
+      type: 'diagram',
+      title: 'CPU vs GPU Encoding Comparison',
+      diagram: `flowchart LR
+    subgraph CPU[CPU Encoding]
+        CPUInput[Input] --> CPUDecode[CPU Decode]
+        CPUDecode --> CPUProcess[CPU Process]
+        CPUProcess --> CPUEncode[CPU Encode]
+        CPUEncode --> CPUOutput[Output]
+    end
+    
+    subgraph GPU[GPU Encoding]
+        GPUInput[Input] --> GPUDecode[GPU Decode]
+        GPUDecode --> GPUProcess[GPU Process]
+        GPUProcess --> GPUEncode[GPU Encode]
+        GPUEncode --> GPUOutput[Output]
+    end`,
+      explanation: 'CPU encoding provides better quality and flexibility but is slower. GPU encoding is much faster but may require tuning for optimal quality.',
+      diagramType: 'mermaid',
+      diagramFormat: 'flowchart'
+    },
+    {
       type: 'bullets',
       heading: 'CPU Encoding Advantages',
       content: 'When to use CPU encoding:',

@@ -86,6 +86,24 @@ export const hardwareAcceleration: Lesson = {
       ]
     },
     {
+      type: 'diagram',
+      title: 'Hardware Acceleration Pipeline',
+      diagram: `sequenceDiagram
+    participant Input as Input File
+    participant GPU as GPU Decoder
+    participant Filter as GPU Filter
+    participant Encoder as GPU Encoder
+    participant Output as Output File
+    
+    Input->>GPU: Hardware Decode
+    GPU->>Filter: Decoded Frames
+    Filter->>Encoder: Filtered Frames
+    Encoder->>Output: Encoded Video`,
+      explanation: 'Hardware acceleration pipeline: GPU handles decoding, filtering, and encoding, keeping the entire process on the GPU for maximum performance.',
+      diagramType: 'mermaid',
+      diagramFormat: 'sequenceDiagram'
+    },
+    {
       type: 'bullets',
       heading: 'Supported Hardware Backends',
       content: 'Available hardware acceleration options:',

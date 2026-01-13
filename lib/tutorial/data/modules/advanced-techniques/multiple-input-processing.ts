@@ -83,6 +83,22 @@ export const multipleInputProcessing: Lesson = {
       ]
     },
     {
+      type: 'diagram',
+      title: 'Multiple Input Processing Flow',
+      diagram: `flowchart LR
+    Input1[Input 1<br/>Video] --> Scale1[Scale]
+    Input2[Input 2<br/>Video] --> Scale2[Scale]
+    Input3[Input 3<br/>Audio] --> AudioMix[Audio Mix]
+    Scale1 --> Stack[Stack Horizontally]
+    Scale2 --> Stack
+    Stack --> Combine[Combine Video/Audio]
+    AudioMix --> Combine
+    Combine --> Output[Output File]`,
+      explanation: 'Multiple inputs are processed independently, then combined. Video streams can be scaled and stacked, audio streams can be mixed, and everything is combined into the final output.',
+      diagramType: 'mermaid',
+      diagramFormat: 'flowchart'
+    },
+    {
       type: 'bullets',
       heading: 'Input Reference Guide',
       content: 'Understanding input references:',

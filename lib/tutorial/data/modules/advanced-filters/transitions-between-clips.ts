@@ -66,6 +66,30 @@ export const transitionsBetweenClips: Lesson = {
       ]
     },
     {
+      type: 'diagram',
+      title: 'Fade Transition Timeline',
+      diagram: `sequenceDiagram
+    participant Clip1 as Clip 1
+    participant FadeOut as Fade Out
+    participant Transition as Transition Zone
+    participant FadeIn as Fade In
+    participant Clip2 as Clip 2
+    participant Concat as Concatenate
+    
+    Note over Clip1: Play at full opacity
+    Clip1->>FadeOut: Start fade out (st=3s)
+    FadeOut->>Transition: Fading out (d=1s)
+    Note over Clip2: Start fade in (st=0s)
+    Clip2->>FadeIn: Fading in (d=1s)
+    FadeIn->>Transition: Overlap zone
+    Transition->>Concat: Both clips processed
+    Concat->>Concat: Join clips sequentially
+    Note over Concat: Output: Smooth transition`,
+      explanation: 'Fade transition timeline: Clip 1 fades out while Clip 2 simultaneously fades in, creating an overlap zone. The clips are then concatenated to create a smooth visual transition between scenes.',
+      diagramType: 'mermaid',
+      diagramFormat: 'sequenceDiagram'
+    },
+    {
       type: 'bullets',
       heading: 'Transition Tips',
       content: 'Creating smooth transitions:',

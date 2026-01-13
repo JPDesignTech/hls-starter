@@ -13,6 +13,72 @@ export const pictureInPicture: Lesson = {
       content: 'Picture-in-Picture (PiP) means overlaying one video on another as a small inset. This is achieved with the overlay filter by taking two video inputs and positioning one on top of the other.'
     },
     {
+      type: 'diagram',
+      title: 'Picture-in-Picture Composition Flow',
+      diagram: '',
+      explanation: 'PiP composition process: Main video and overlay video are processed separately. The overlay is scaled down, then positioned and composited onto the main video using the overlay filter.',
+      diagramType: 'react-flow',
+      reactFlowData: {
+        nodes: [
+          {
+            id: 'main',
+            label: 'Main Video\nmain.mp4',
+            position: { x: 0, y: 0 },
+            type: 'input'
+          },
+          {
+            id: 'overlay',
+            label: 'Overlay Video\ninsert.mp4',
+            position: { x: 0, y: 150 },
+            type: 'input'
+          },
+          {
+            id: 'scale',
+            label: 'scale Filter\nscale=iw/4:ih/4',
+            position: { x: 200, y: 150 },
+            type: 'default'
+          },
+          {
+            id: 'overlay-filter',
+            label: 'overlay Filter\nPosition: bottom-right',
+            position: { x: 400, y: 75 },
+            type: 'default'
+          },
+          {
+            id: 'output',
+            label: 'Output\noutput.mp4',
+            position: { x: 600, y: 75 },
+            type: 'output'
+          }
+        ],
+        edges: [
+          {
+            id: 'e1',
+            source: 'main',
+            target: 'overlay-filter',
+            label: '[0]'
+          },
+          {
+            id: 'e2',
+            source: 'overlay',
+            target: 'scale',
+            label: '[1]'
+          },
+          {
+            id: 'e3',
+            source: 'scale',
+            target: 'overlay-filter',
+            label: '[pip]'
+          },
+          {
+            id: 'e4',
+            source: 'overlay-filter',
+            target: 'output'
+          }
+        ]
+      }
+    },
+    {
       type: 'code',
       command: 'ffmpeg -i main.mp4 -i insert.mp4 -filter_complex "[1]scale=iw/4:ih/4[pip]; [0][pip] overlay=main_w-overlay_w-10:main_h-overlay_h-10" output.mp4',
       explanation: 'Overlay a second video on the bottom-right. First scale it to 1/4 size, then position it 10px from right and bottom.',

@@ -23,6 +23,19 @@ The \`-i\` flag specifies the input file, and the last argument is typically the
 You can specify multiple input files by using multiple \`-i\` flags. FFMPEG will process them in order.`
     },
     {
+      type: 'diagram',
+      title: 'FFmpeg Processing Flow',
+      diagram: `flowchart LR
+    Input[Input File] --> Decode[Decode Streams]
+    Decode --> Process[Process/Filter]
+    Process --> Encode[Encode Streams]
+    Encode --> Mux[Mux into Container]
+    Mux --> Output[Output File]`,
+      explanation: 'FFmpeg processes media through these stages: decode input streams, process/filter them, encode to output format, and mux into container.',
+      diagramType: 'mermaid',
+      diagramFormat: 'flowchart'
+    },
+    {
       type: 'code',
       command: 'ffmpeg -i input.mp4 output.avi',
       explanation: 'Basic transcoding: convert MP4 to AVI format',

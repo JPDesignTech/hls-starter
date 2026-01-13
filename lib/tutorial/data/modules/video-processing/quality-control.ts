@@ -30,6 +30,21 @@ Bitrate controls the amount of data per second. Higher bitrate = better quality 
 For precise file size control, use two-pass encoding to analyze the video first, then encode.`
     },
     {
+      type: 'diagram',
+      title: 'CRF Encoding Process',
+      diagram: `flowchart TD
+    Input[Input Video] --> Analyze[Analyze Frame Complexity]
+    Analyze --> CRF[Apply CRF Value]
+    CRF --> Quality{Quality vs Size}
+    Quality -->|Low CRF| HighQuality[High Quality<br/>Large File]
+    Quality -->|High CRF| LowQuality[Lower Quality<br/>Small File]
+    HighQuality --> Output[Output File]
+    LowQuality --> Output`,
+      explanation: 'CRF encoding analyzes frame complexity and adjusts quality automatically. Lower CRF values prioritize quality, higher values prioritize file size.',
+      diagramType: 'mermaid',
+      diagramFormat: 'flowchart'
+    },
+    {
       type: 'code',
       command: 'ffmpeg -i input.mp4 -c:v libx264 -crf 23 output.mp4',
       explanation: 'Encode with CRF 23 (default quality)',

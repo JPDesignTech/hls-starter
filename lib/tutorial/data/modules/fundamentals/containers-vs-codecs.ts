@@ -13,6 +13,21 @@ export const containersVsCodecs: Lesson = {
       content: 'Media files consist of a container format and the encoded streams inside it. Understanding the difference between containers and codecs is fundamental to working with FFmpeg effectively.'
     },
     {
+      type: 'diagram',
+      title: 'Container vs Codec Relationship',
+      diagram: `graph TB
+    Container[Container Format<br/>MP4, MKV, AVI] --> VideoStream[Video Stream]
+    Container --> AudioStream[Audio Stream]
+    Container --> SubtitleStream[Subtitle Stream]
+    
+    VideoStream --> VideoCodec[Video Codec<br/>H.264, H.265, VP9]
+    AudioStream --> AudioCodec[Audio Codec<br/>AAC, MP3, Opus]
+    SubtitleStream --> SubtitleCodec[Subtitle Codec<br/>SRT, ASS]`,
+      explanation: 'A container (like MP4) wraps multiple streams. Each stream uses a codec (like H.264 for video, AAC for audio) to encode the actual data.',
+      diagramType: 'mermaid',
+      diagramFormat: 'graph'
+    },
+    {
       type: 'bullets',
       heading: 'Container Formats',
       content: 'The container (e.g. MP4, MKV, AVI) is like a wrapper that holds:',

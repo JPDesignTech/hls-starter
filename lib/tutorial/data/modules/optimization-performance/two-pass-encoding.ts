@@ -78,6 +78,21 @@ export const twoPassEncoding: Lesson = {
       ]
     },
     {
+      type: 'diagram',
+      title: 'Two-Pass Encoding Process',
+      diagram: `flowchart TD
+    Start[Start] --> Pass1[Pass 1: Analysis]
+    Pass1 --> Analyze[Analyze Frame Complexity]
+    Analyze --> Stats[Store Statistics]
+    Stats --> Pass2[Pass 2: Encoding]
+    Pass2 --> Allocate[Allocate Bits Optimally]
+    Allocate --> Encode[Encode Video]
+    Encode --> Output[Output File]`,
+      explanation: 'Two-pass encoding: First pass analyzes video complexity and stores statistics. Second pass uses these statistics to allocate bits optimally, giving complex scenes more bits and simple scenes fewer bits.',
+      diagramType: 'mermaid',
+      diagramFormat: 'flowchart'
+    },
+    {
       type: 'bullets',
       heading: 'How Two-Pass Works',
       content: 'The two-pass process:',

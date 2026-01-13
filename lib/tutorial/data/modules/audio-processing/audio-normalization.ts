@@ -13,6 +13,23 @@ export const audioNormalization: Lesson = {
       content: 'Audio normalization balances volume levels across audio files. This is essential for consistent loudness, avoiding clipping, and meeting podcast and broadcast standards. FFmpeg offers simple peak normalization and advanced loudness normalization.'
     },
     {
+      type: 'diagram',
+      title: 'Normalization Process',
+      diagram: `flowchart LR
+    Input[Input Audio] --> Analyze[Analyze Audio Levels]
+    Analyze --> Method{Method}
+    Method -->|Peak| Peak[Peak Normalization<br/>volume filter]
+    Method -->|Loudness| Loudnorm[loudnorm Filter<br/>EBU R128]
+    Peak --> Adjust[Adjust Volume]
+    Loudnorm --> AnalyzeLoud[Analyze Perceived Loudness]
+    AnalyzeLoud --> AdjustLoud[Adjust to Target LUFS]
+    Adjust --> Output[Output Audio]
+    AdjustLoud --> Output`,
+      explanation: 'Normalization process: Input audio is analyzed, then normalized using either peak normalization (simple volume adjustment) or loudness normalization (perceived loudness based on EBU R128 standard). Loudness normalization is preferred for professional workflows.',
+      diagramType: 'mermaid',
+      diagramFormat: 'flowchart'
+    },
+    {
       type: 'code',
       command: 'ffmpeg -i input.wav -af "volume=1.5" output.wav',
       explanation: 'Simple peak normalization by multiplying volume. This increases volume by 50% (1.5×). Use values less than 1.0 to decrease volume.',

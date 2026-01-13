@@ -21,10 +21,12 @@
     "frimousse": "^0.2.0",
     "hls.js": "^1.6.5",
     "lucide-react": "^0.510.0",
+    "mermaid": "^11.12.2",
     "multer": "^1.4.5-lts.1",
     "next": "15.3.8",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
+    "reactflow": "^11.11.4",
     "recharts": "^3.5.1",
     "tailwind-merge": "^3.3.0",
     "uuid": "^9.0.1"
