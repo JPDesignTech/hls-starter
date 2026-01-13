@@ -60,8 +60,9 @@ public/streams/
 # Google Cloud credentials
 *.json
 !package.json
-!tsconfig.json
+!tsconfig*.json
 !components.json
+!vercel.json
 
 # FFmpeg temporary files
 *.ts
