@@ -1,4 +1,4 @@
-import { Lesson } from '@/lib/tutorial/types';
+import { type Lesson } from '@/lib/tutorial/types';
 
 export const audioStreamAnalysis: Lesson = {
   id: 'audio-stream-analysis',

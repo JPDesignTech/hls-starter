@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { type NextRequest, NextResponse } from 'next/server';
 import { kv } from '@/lib/redis';
 import { createStorage } from '@/lib/gcs-config';
 
@@ -25,13 +25,14 @@ export async function POST(request: NextRequest) {
         try {
           await file.makePublic();
           console.log(`[WTF Upload] Made file public: ${filename}`);
-        } catch (makePublicError: any) {
+        } catch (makePublicError) {
           // If uniform bucket-level access is enabled, makePublic() will fail with code 400
           // In that case, files inherit bucket-level IAM permissions
-          if (makePublicError.code === 400) {
+          const error = makePublicError as any;
+          if (error.code === 400) {
             console.log(`[WTF Upload] Bucket uses uniform bucket-level access, file inherits bucket permissions: ${filename}`);
           } else {
-            console.warn(`[WTF Upload] Failed to make file public: ${makePublicError.message}`);
+            console.warn(`[WTF Upload] Failed to make file public: ${error.message ?? String(makePublicError)}`);
           }
         }
       } catch (gcsError) {

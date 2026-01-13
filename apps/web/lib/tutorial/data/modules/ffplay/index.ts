@@ -1,4 +1,4 @@
-import { Module } from '@/lib/tutorial/types';
+import { type Module } from '@/lib/tutorial/types';
 import { introductionToFFplay } from './introduction-to-ffplay';
 import { basicVideoPlayback } from './basic-video-playback';
 import { windowSizeControl } from './window-size-control';

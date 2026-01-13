@@ -57,7 +57,7 @@ export function ErrorDisplay({
           <AlertTitle>{title}</AlertTitle>
           <AlertDescription className="mt-2">
             <p>{getErrorMessage()}</p>
-            {(onRetry || onDismiss) && (
+            {(onRetry ?? onDismiss) && (
               <div className="flex gap-2 mt-4">
                 {onRetry && (
                   <Button

@@ -1,4 +1,4 @@
-import { Module } from '@/lib/tutorial/types';
+import { type Module } from '@/lib/tutorial/types';
 import { twoPassEncoding } from './two-pass-encoding';
 import { hardwareAcceleration } from './hardware-acceleration';
 import { multiThreading } from './multi-threading';

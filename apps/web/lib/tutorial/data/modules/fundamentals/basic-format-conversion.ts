@@ -1,4 +1,4 @@
-import { Lesson } from '@/lib/tutorial/types';
+import { type Lesson } from '@/lib/tutorial/types';
 
 export const basicFormatConversion: Lesson = {
   id: 'basic-format-conversion',

@@ -3,8 +3,8 @@
  * Represents a collection of related lessons grouped by topic
  */
 
-import { Lesson } from './lesson';
-import { ModuleQuiz } from './module-quiz';
+import { type Lesson } from './lesson';
+import { type ModuleQuiz } from './module-quiz';
 
 export interface Module {
   id: string;

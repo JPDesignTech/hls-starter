@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { type NextRequest, NextResponse } from 'next/server';
 import { exec } from 'child_process';
 import { promises as fs } from 'fs';
 import path from 'path';
@@ -64,8 +64,7 @@ function parseCommand(command: string, sampleVideoPath: string): string[] {
   let inQuotes = false;
   let quoteChar = '';
 
-  for (let i = 0; i < processedCommand.length; i++) {
-    const char = processedCommand[i];
+  for (const char of processedCommand) {
     
     if ((char === '"' || char === "'") && !inQuotes) {
       inQuotes = true;
@@ -115,13 +114,13 @@ export async function POST(request: NextRequest) {
     const validation = validateCommand(command, sampleVideoId);
     if (!validation.valid) {
       return NextResponse.json(
-        { error: validation.error || 'Invalid command' },
+        { error: validation.error ?? 'Invalid command' },
         { status: 400 }
       );
     }
 
     // Get sample video path
-    const sampleVideoPath = SAMPLE_VIDEOS[sampleVideoId] || SAMPLE_VIDEOS['default'];
+    const sampleVideoPath = SAMPLE_VIDEOS[sampleVideoId] || SAMPLE_VIDEOS.default;
     
     // Download sample video to temp directory
     const tempDir = process.env.VERCEL ? '/tmp' : path.join(process.cwd(), 'temp');
@@ -179,7 +178,7 @@ export async function POST(request: NextRequest) {
 
     // Determine output type based on command flags
     let outputType: 'text' | 'json' | 'csv' = 'text';
-    if (command.includes('-print_format json') || command.includes('-of json')) {
+    if (command.includes('-print_format json') ?? command.includes('-of json')) {
       outputType = 'json';
     } else if (command.includes('-of csv')) {
       outputType = 'csv';
@@ -187,7 +186,7 @@ export async function POST(request: NextRequest) {
 
     // Return the output
     return NextResponse.json({
-      output: stdout || stderr, // FFProbe may output to stderr for some formats
+      output: stdout ?? stderr, // FFProbe may output to stderr for some formats
       outputType,
       executionTime,
       success: true,

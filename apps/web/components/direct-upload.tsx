@@ -14,8 +14,8 @@ interface UploadResponse {
 
 interface DirectUploadProps {
   onUploadComplete?: (videoId: string, filename: string) => void;
-  onVideoAdded?: (video: any) => void;
-  onVideoUpdated?: (videoId: string, updates: any) => void;
+  onVideoAdded?: (video: unknown) => void;
+  onVideoUpdated?: (videoId: string, updates: unknown) => void;
 }
 
 export function DirectUpload({ onUploadComplete, onVideoAdded, onVideoUpdated }: DirectUploadProps) {
@@ -26,7 +26,7 @@ export function DirectUpload({ onUploadComplete, onVideoAdded, onVideoUpdated }:
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const selectedFile = e.target.files?.[0];
-    if (selectedFile && selectedFile.type.startsWith('video/')) {
+    if (selectedFile?.type.startsWith('video/')) {
       setFile(selectedFile);
       setError(null);
     } else {
@@ -87,7 +87,8 @@ export function DirectUpload({ onUploadComplete, onVideoAdded, onVideoUpdated }:
         }
       });
 
-      xhr.addEventListener('load', async () => {
+      xhr.addEventListener('load', () => {
+        void (async () => {
         if (xhr.status === 200) {
           // Step 3: Notify your backend that upload is complete
           await fetch('/api/upload/complete', {
@@ -121,6 +122,7 @@ export function DirectUpload({ onUploadComplete, onVideoAdded, onVideoUpdated }:
         } else {
           throw new Error('Upload failed');
         }
+        })();
       });
 
       xhr.addEventListener('error', () => {

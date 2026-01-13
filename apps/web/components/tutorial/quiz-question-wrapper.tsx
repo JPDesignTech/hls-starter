@@ -1,10 +1,13 @@
 'use client';
 
 import * as React from 'react';
-import { ModuleQuizQuestion } from '@/lib/tutorial/types/module-quiz';
+import { type ModuleQuizQuestion } from '@/lib/tutorial/types/module-quiz';
 import { QuizComponent } from './quiz-component';
 import { InteractiveChallenge } from './interactive-challenge';
-import { validateMultipleChoice, validateCommandBuilder } from '@/lib/tutorial/utils/quiz-scoring';
+import {
+  validateMultipleChoice,
+  validateCommandBuilder,
+} from '@/lib/tutorial/utils/quiz-scoring';
 import { Play, Loader2, AlertCircle, CheckCircle } from 'lucide-react';
 import { VideoPlayer } from '@/components/video-player';
 
@@ -23,7 +26,8 @@ export function QuizQuestionWrapper({
   onAnswer,
   showWeight = true,
 }: QuizQuestionWrapperProps) {
-  const weight = question.weight ?? (question.type === 'command-builder' ? 2 : 1);
+  const weight =
+    question.weight ?? (question.type === 'command-builder' ? 2 : 1);
 
   if (question.type === 'multiple-choice') {
     // Convert ModuleQuizQuestion to QuizBlock format for QuizComponent
@@ -141,36 +145,46 @@ function CommandBuilderQuestion({
   const [userCommand, setUserCommand] = React.useState('');
   const [showHint, setShowHint] = React.useState(false);
   const [hintIndex, setHintIndex] = React.useState(0);
-  const [status, setStatus] = React.useState<'idle' | 'checking' | 'correct' | 'incorrect'>('idle');
+  const [status, setStatus] = React.useState<
+    'idle' | 'checking' | 'correct' | 'incorrect'
+  >('idle');
   const [feedback, setFeedback] = React.useState('');
   const [hasAnswered, setHasAnswered] = React.useState(false);
-  
+
   // Preview state
   const [isPreviewProcessing, setIsPreviewProcessing] = React.useState(false);
-  const [previewResult, setPreviewResult] = React.useState<PreviewResult | null>(null);
-  const [ffprobePreviewResult, setFFProbePreviewResult] = React.useState<FFProbePreviewResult | null>(null);
+  const [previewResult, setPreviewResult] =
+    React.useState<PreviewResult | null>(null);
+  const [ffprobePreviewResult, setFFProbePreviewResult] =
+    React.useState<FFProbePreviewResult | null>(null);
   const [previewError, setPreviewError] = React.useState<string | null>(null);
-  const [errorType, setErrorType] = React.useState<'syntax' | 'execution' | 'validation' | null>(null);
-  const [hasTestedFFPlayCommand, setHasTestedFFPlayCommand] = React.useState(false);
-  
-  const shouldShowPreview = question.sampleVideoId && (question.showPreview !== false);
-  const previewType = question.previewType || 'filter';
-  
+  const [errorType, setErrorType] = React.useState<
+    'syntax' | 'execution' | 'validation' | null
+  >(null);
+  const [hasTestedFFPlayCommand, setHasTestedFFPlayCommand] =
+    React.useState(false);
+
+  const shouldShowPreview =
+    question.sampleVideoId && question.showPreview !== false;
+  const previewType = question.previewType ?? 'filter';
+
   // Detect if this is an FFProbe question (check solution or current command)
-  const isFFProbeQuestion = challengeBlock.solution?.trim().startsWith('ffprobe') || false;
+  const isFFProbeQuestion =
+    challengeBlock.solution?.trim().startsWith('ffprobe') || false;
   const isFFProbeCommand = (command: string): boolean => {
     return command.trim().startsWith('ffprobe');
   };
-  
+
   // Determine if we should show FFProbe preview (either question is FFProbe or command starts with ffprobe)
   const showFFProbePreview = isFFProbeQuestion || isFFProbeCommand(userCommand);
 
   // Detect if this is an FFPlay question (check solution or current command)
-  const isFFPlayQuestion = challengeBlock.solution?.trim().startsWith('ffplay') || false;
+  const isFFPlayQuestion =
+    challengeBlock.solution?.trim().startsWith('ffplay') || false;
   const isFFPlayCommand = (command: string): boolean => {
     return command.trim().startsWith('ffplay');
   };
-  
+
   // Determine if we should show FFPlay preview (either question is FFPlay or command starts with ffplay)
   const showFFPlayPreview = isFFPlayQuestion || isFFPlayCommand(userCommand);
 
@@ -178,34 +192,54 @@ function CommandBuilderQuestion({
   const validateSyntax = (command: string): { valid: boolean; error?: string } => {
     const trimmed = command.trim();
     const isFFProbe = isFFProbeCommand(trimmed);
-    
+
     // Must start with ffmpeg, ffprobe, or ffplay
-    if (!trimmed.startsWith('ffmpeg') && !trimmed.startsWith('ffprobe') && !trimmed.startsWith('ffplay')) {
-      return { valid: false, error: 'Command must start with "ffmpeg", "ffprobe", or "ffplay"' };
+    if (
+      !trimmed.startsWith('ffmpeg') &&
+      !trimmed.startsWith('ffprobe') &&
+      !trimmed.startsWith('ffplay')
+    ) {
+      return {
+        valid: false,
+        error: 'Command must start with "ffmpeg", "ffprobe", or "ffplay"',
+      };
     }
-    
+
     const isFFPlay = isFFPlayCommand(trimmed);
-    
+
     // FFProbe and FFPlay commands don't always need -i (can use input file directly)
     if (isFFProbe || isFFPlay) {
       // Check for input file reference (either -i flag or direct file reference)
-      if (!trimmed.includes('-i') && !trimmed.match(/input\.(mp4|mp3|wav|avi|mov)/i) && !trimmed.match(/sample\.(mp4|mp3|wav|avi|mov)/i)) {
-        return { valid: false, error: `${isFFProbe ? 'FFProbe' : 'FFPlay'} command must include an input file` };
+      if (
+        !trimmed.includes('-i') &&
+        !/input\.(mp4|mp3|wav|avi|mov)/i.exec(trimmed) &&
+        !/sample\.(mp4|mp3|wav|avi|mov)/i.exec(trimmed)
+      ) {
+        return {
+          valid: false,
+          error: `${isFFProbe ? 'FFProbe' : 'FFPlay'} command must include an input file`,
+        };
       }
     } else {
       // FFmpeg commands must have input file flag
       if (!trimmed.includes('-i')) {
-        return { valid: false, error: 'Command must include an input file flag (-i)' };
+        return {
+          valid: false,
+          error: 'Command must include an input file flag (-i)',
+        };
       }
-      
+
       // Basic structure check - should have input and output
       const parts = trimmed.split(/\s+/);
-      const inputIndex = parts.findIndex(p => p === '-i');
+      const inputIndex = parts.findIndex((p) => p === '-i');
       if (inputIndex === -1 || inputIndex === parts.length - 1) {
-        return { valid: false, error: 'Command must specify an input file after -i flag' };
+        return {
+          valid: false,
+          error: 'Command must specify an input file after -i flag',
+        };
       }
     }
-    
+
     // Check for dangerous patterns
     const dangerousPatterns = [
       /rm\s+-rf/,
@@ -214,15 +248,18 @@ function CommandBuilderQuestion({
       /mkfs/,
       /dd\s+if=/,
     ];
-    
+
     for (const pattern of dangerousPatterns) {
       if (pattern.test(command)) {
-        return { valid: false, error: 'Command contains potentially dangerous operations' };
+        return {
+          valid: false,
+          error: 'Command contains potentially dangerous operations',
+        };
       }
     }
-    
+
     return { valid: true };
-  };
+  };;
 
   const showNextHint = () => {
     if (hintIndex < challengeBlock.hints.length - 1) {
@@ -235,30 +272,35 @@ function CommandBuilderQuestion({
   const testCommand = async () => {
     if (hasAnswered && status === 'correct') return;
     if (!userCommand.trim()) return;
-    
+
     // Reset states
     setStatus('checking');
     setPreviewError(null);
     setErrorType(null);
     setPreviewResult(null);
     setIsPreviewProcessing(true);
-    
+
     // Step 1: Validate syntax
     const syntaxCheck = validateSyntax(userCommand);
     if (!syntaxCheck.valid) {
       setStatus('incorrect');
-      setFeedback(syntaxCheck.error || 'Invalid command syntax. Please check your FFmpeg command.');
+      setFeedback(
+        syntaxCheck.error ??
+          'Invalid command syntax. Please check your FFmpeg command.'
+      );
       setErrorType('syntax');
       setIsPreviewProcessing(false);
       return;
     }
-    
+
     // Step 2: Execute command (if preview is enabled)
     if (shouldShowPreview && question.sampleVideoId) {
       try {
         const isFFProbe = showFFProbePreview;
-        const apiEndpoint = isFFProbe ? '/api/tutorial/execute-ffprobe' : '/api/tutorial/execute';
-        
+        const apiEndpoint = isFFProbe
+          ? '/api/tutorial/execute-ffprobe'
+          : '/api/tutorial/execute';
+
         const response = await fetch(apiEndpoint, {
           method: 'POST',
           headers: {
@@ -274,7 +316,10 @@ function CommandBuilderQuestion({
         const data = await response.json();
 
         if (!response.ok) {
-          throw new Error(data.error || `Failed to ${isFFProbe ? 'execute' : 'process'} command`);
+          throw new Error(
+            data.error ??
+              `Failed to ${isFFProbe ? 'execute' : 'process'} command`
+          );
         }
 
         if (isFFProbe) {
@@ -286,7 +331,8 @@ function CommandBuilderQuestion({
         }
         setPreviewError(null);
       } catch (err) {
-        const errorMessage = err instanceof Error ? err.message : 'An error occurred';
+        const errorMessage =
+          err instanceof Error ? err.message : 'An error occurred';
         setPreviewError(errorMessage);
         setErrorType('execution');
         setStatus('incorrect');
@@ -297,17 +343,17 @@ function CommandBuilderQuestion({
         return;
       }
     }
-    
+
     setIsPreviewProcessing(false);
-    
+
     // Step 3: Validate against quiz requirements
     const isValid = validateCommandBuilder(question, userCommand);
-    
+
     // For FFPlay commands, mark as tested if validation passes
     if (showFFPlayPreview && isValid) {
       setHasTestedFFPlayCommand(true);
     }
-    
+
     setTimeout(() => {
       if (isValid) {
         setStatus('correct');
@@ -316,14 +362,16 @@ function CommandBuilderQuestion({
         setErrorType(null);
       } else {
         setStatus('incorrect');
-        setFeedback('Command executed successfully but doesn\'t meet the requirements. Try again or check the hints!');
+        setFeedback(
+          "Command executed successfully but doesn't meet the requirements. Try again or check the hints!"
+        );
         setErrorType('validation');
       }
-      
+
       // Notify parent of answer
       onAnswer(question.id, isValid, userCommand);
     }, 500);
-  };
+  };;
 
   const formatFileSize = (bytes: number): string => {
     if (bytes < 1024) return `${bytes} B`;
@@ -358,23 +406,29 @@ function CommandBuilderQuestion({
         </div>
         <h3 className="text-white font-semibold">{challengeBlock.title}</h3>
       </div>
-      
+
       <p className="text-gray-300">{challengeBlock.description}</p>
-      
+
       {/* Requirements */}
-      {challengeBlock.requirements && challengeBlock.requirements.length > 0 && (
-        <div className="bg-white/5 rounded-lg p-3">
-          <h4 className="text-white text-sm font-semibold mb-2">Requirements:</h4>
-          <ul className="space-y-1">
-            {challengeBlock.requirements.map((req, index) => (
-              <li key={index} className="text-gray-300 text-sm flex items-start gap-2">
-                <span className="text-purple-400 mt-0.5">•</span>
-                <span>{req}</span>
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
+      {challengeBlock.requirements &&
+        challengeBlock.requirements.length > 0 && (
+          <div className="bg-white/5 rounded-lg p-3">
+            <h4 className="text-white text-sm font-semibold mb-2">
+              Requirements:
+            </h4>
+            <ul className="space-y-1">
+              {challengeBlock.requirements.map((req, index) => (
+                <li
+                  key={index}
+                  className="text-gray-300 text-sm flex items-start gap-2"
+                >
+                  <span className="text-purple-400 mt-0.5">•</span>
+                  <span>{req}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
 
       {/* Preview Section */}
       {shouldShowPreview && (
@@ -382,7 +436,7 @@ function CommandBuilderQuestion({
           <h4 className="text-white text-sm font-semibold">
             {showFFProbePreview ? 'Preview' : 'Preview'}
           </h4>
-          
+
           {/* FFPlay Video Preview */}
           {showFFPlayPreview ? (
             <div className="bg-gray-950/50 rounded-lg p-3">
@@ -404,8 +458,8 @@ function CommandBuilderQuestion({
                 )}
               </div>
               <div className="text-white/40 text-xs mt-2">
-                {hasTestedFFPlayCommand && question.sampleVideoId 
-                  ? `${question.sampleVideoId}.mp4` 
+                {hasTestedFFPlayCommand && question.sampleVideoId
+                  ? `${question.sampleVideoId}.mp4`
                   : 'Preview will appear after testing your command'}
               </div>
             </div>
@@ -429,7 +483,9 @@ function CommandBuilderQuestion({
                   )}
                 </div>
                 <div className="text-white/40 text-xs mt-2">
-                  {question.sampleVideoId ? `${question.sampleVideoId}.mp4` : 'Sample file'}
+                  {question.sampleVideoId
+                    ? `${question.sampleVideoId}.mp4`
+                    : 'Sample file'}
                 </div>
               </div>
 
@@ -440,14 +496,19 @@ function CommandBuilderQuestion({
                   {isPreviewProcessing ? (
                     <div className="flex items-center justify-center py-8">
                       <Loader2 className="w-6 h-6 text-indigo-400 animate-spin" />
-                      <span className="ml-2 text-white/60 text-sm">Executing command...</span>
+                      <span className="ml-2 text-white/60 text-sm">
+                        Executing command...
+                      </span>
                     </div>
                   ) : ffprobePreviewResult?.output ? (
                     <pre className="text-white text-xs font-mono whitespace-pre-wrap break-words">
-                      {ffprobePreviewResult.outputType === 'json' 
-                        ? JSON.stringify(JSON.parse(ffprobePreviewResult.output), null, 2)
-                        : ffprobePreviewResult.output
-                      }
+                      {ffprobePreviewResult.outputType === 'json'
+                        ? JSON.stringify(
+                            JSON.parse(ffprobePreviewResult.output),
+                            null,
+                            2
+                          )
+                        : ffprobePreviewResult.output}
                     </pre>
                   ) : (
                     <div className="text-white/40 text-xs py-4 text-center">
@@ -457,7 +518,9 @@ function CommandBuilderQuestion({
                 </div>
                 {ffprobePreviewResult && (
                   <div className="text-white/40 text-xs mt-2">
-                    Executed in {ffprobePreviewResult.executionTime.toFixed(2)}s • Output type: {ffprobePreviewResult.outputType.toUpperCase()}
+                    Executed in {ffprobePreviewResult.executionTime.toFixed(2)}s
+                    • Output type:{' '}
+                    {ffprobePreviewResult.outputType.toUpperCase()}
                   </div>
                 )}
               </div>
@@ -465,102 +528,135 @@ function CommandBuilderQuestion({
           ) : (
             /* FFmpeg Video/Audio Preview */
             <div className="grid md:grid-cols-2 gap-4">
-            {/* Original Preview */}
-            <div className="bg-gray-950/50 rounded-lg p-3">
-              <div className="text-white/60 text-xs mb-2">Original</div>
-              <div className="bg-gray-800 rounded aspect-video overflow-hidden">
-                {(previewResult?.originalUrl || question.sampleVideoId) ? (
-                  previewType === 'audio' ? (
-                    <div className="w-full h-full flex items-center justify-center">
-                      <audio controls className="w-full">
-                        <source src={previewResult?.originalUrl || `/tutorial-samples/${question.sampleVideoId}.mp4`} type="audio/mpeg" />
-                      </audio>
-                    </div>
+              {/* Original Preview */}
+              <div className="bg-gray-950/50 rounded-lg p-3">
+                <div className="text-white/60 text-xs mb-2">Original</div>
+                <div className="bg-gray-800 rounded aspect-video overflow-hidden">
+                  {previewResult?.originalUrl || question.sampleVideoId ? (
+                    previewType === 'audio' ? (
+                      <div className="w-full h-full flex items-center justify-center">
+                        <audio controls className="w-full">
+                          <source
+                            src={
+                              previewResult?.originalUrl ??
+                              `/tutorial-samples/${question.sampleVideoId}.mp4`
+                            }
+                            type="audio/mpeg"
+                          />
+                        </audio>
+                      </div>
+                    ) : (
+                      <VideoPlayer
+                        src={
+                          previewResult?.originalUrl ??
+                          `/tutorial-samples/${question.sampleVideoId}.mp4`
+                        }
+                        className="w-full h-full"
+                        autoPlay={false}
+                        muted={true}
+                      />
+                    )
                   ) : (
-                    <VideoPlayer
-                      src={previewResult?.originalUrl || `/tutorial-samples/${question.sampleVideoId}.mp4`}
-                      className="w-full h-full"
-                      autoPlay={false}
-                      muted={true}
-                    />
-                  )
-                ) : (
-                  <div className="w-full h-full flex items-center justify-center">
-                    <div className="text-white/40 text-xs">Sample File Preview</div>
-                  </div>
-                )}
+                    <div className="w-full h-full flex items-center justify-center">
+                      <div className="text-white/40 text-xs">
+                        Sample File Preview
+                      </div>
+                    </div>
+                  )}
+                </div>
+                <div className="text-white/40 text-xs mt-2">
+                  {previewResult
+                    ? `${previewResult.originalDimensions.width}x${previewResult.originalDimensions.height} • ${formatFileSize(previewResult.originalSize)}`
+                    : 'Sample file'}
+                </div>
               </div>
-              <div className="text-white/40 text-xs mt-2">
-                {previewResult
-                  ? `${previewResult.originalDimensions.width}x${previewResult.originalDimensions.height} • ${formatFileSize(previewResult.originalSize)}`
-                  : 'Sample file'}
-              </div>
-            </div>
 
-            {/* Processed Preview */}
-            <div className="bg-gray-950/50 rounded-lg p-3">
-              <div className="text-white/60 text-xs mb-2">After Processing</div>
-              <div className="bg-gray-800 rounded aspect-video overflow-hidden">
-                {isPreviewProcessing ? (
-                  <div className="w-full h-full flex items-center justify-center">
-                    <Loader2 className="w-6 h-6 text-indigo-400 animate-spin" />
-                  </div>
-                ) : previewResult?.processedUrl ? (
-                  previewType === 'audio' ? (
+              {/* Processed Preview */}
+              <div className="bg-gray-950/50 rounded-lg p-3">
+                <div className="text-white/60 text-xs mb-2">
+                  After Processing
+                </div>
+                <div className="bg-gray-800 rounded aspect-video overflow-hidden">
+                  {isPreviewProcessing ? (
                     <div className="w-full h-full flex items-center justify-center">
-                      <audio controls className="w-full">
-                        <source src={previewResult.processedUrl} type="audio/mpeg" />
-                      </audio>
+                      <Loader2 className="w-6 h-6 text-indigo-400 animate-spin" />
                     </div>
+                  ) : previewResult?.processedUrl ? (
+                    previewType === 'audio' ? (
+                      <div className="w-full h-full flex items-center justify-center">
+                        <audio controls className="w-full">
+                          <source
+                            src={previewResult.processedUrl}
+                            type="audio/mpeg"
+                          />
+                        </audio>
+                      </div>
+                    ) : (
+                      <VideoPlayer
+                        src={previewResult.processedUrl}
+                        className="w-full h-full"
+                        autoPlay={false}
+                        muted={true}
+                      />
+                    )
                   ) : (
-                    <VideoPlayer
-                      src={previewResult.processedUrl}
-                      className="w-full h-full"
-                      autoPlay={false}
-                      muted={true}
-                    />
-                  )
-                ) : (
-                  <div className="w-full h-full flex items-center justify-center">
-                    <div className="text-white/40 text-xs">{getPreviewTypeLabel()}</div>
-                  </div>
-                )}
-              </div>
-              <div className="text-white/40 text-xs mt-2">
-                {previewResult
-                  ? `${previewResult.processedDimensions.width}x${previewResult.processedDimensions.height} • ${formatFileSize(previewResult.processedSize)}`
-                  : getPreviewTypeLabel()}
+                    <div className="w-full h-full flex items-center justify-center">
+                      <div className="text-white/40 text-xs">
+                        {getPreviewTypeLabel()}
+                      </div>
+                    </div>
+                  )}
+                </div>
+                <div className="text-white/40 text-xs mt-2">
+                  {previewResult
+                    ? `${previewResult.processedDimensions.width}x${previewResult.processedDimensions.height} • ${formatFileSize(previewResult.processedSize)}`
+                    : getPreviewTypeLabel()}
+                </div>
               </div>
             </div>
-          </div>
           )}
 
           {/* Preview Success - shown automatically after execution */}
-          {((previewResult && !previewError) || (ffprobePreviewResult && !previewError)) && (
+          {((previewResult ?? !previewError) ||
+            (ffprobePreviewResult && !previewError)) && (
             <div className="bg-green-900/30 border border-green-500/50 rounded-lg p-3">
               <div className="flex items-start gap-2">
                 <CheckCircle className="h-4 w-4 text-green-400 flex-shrink-0 mt-0.5" />
                 <div>
-                  <p className="text-green-300 text-xs font-semibold">Command Executed Successfully</p>
+                  <p className="text-green-300 text-xs font-semibold">
+                    Command Executed Successfully
+                  </p>
                   <p className="text-green-200 text-xs">
-                    {ffprobePreviewResult 
+                    {ffprobePreviewResult
                       ? `Executed in ${ffprobePreviewResult.executionTime.toFixed(2)}s • Output type: ${ffprobePreviewResult.outputType.toUpperCase()}`
                       : previewResult && (
-                        <>
-                          Processed in {previewResult.executionTime.toFixed(2)}s
-                          {previewResult.originalSize && previewResult.processedSize && (
-                            <span>
-                              {' '}• Size: {formatFileSize(previewResult.processedSize)}
-                              {previewResult.processedSize < previewResult.originalSize && (
-                                <span className="text-green-300">
-                                  {' '}(-{((1 - previewResult.processedSize / previewResult.originalSize) * 100).toFixed(1)}%)
+                          <>
+                            Processed in{' '}
+                            {previewResult.executionTime.toFixed(2)}s
+                            {previewResult.originalSize &&
+                              previewResult.processedSize && (
+                                <span>
+                                  {' '}
+                                  • Size:{' '}
+                                  {formatFileSize(previewResult.processedSize)}
+                                  {previewResult.processedSize <
+                                    previewResult.originalSize && (
+                                    <span className="text-green-300">
+                                      {' '}
+                                      (-
+                                      {(
+                                        (1 -
+                                          previewResult.processedSize /
+                                            previewResult.originalSize) *
+                                        100
+                                      ).toFixed(1)}
+                                      %)
+                                    </span>
+                                  )}
                                 </span>
                               )}
-                            </span>
-                          )}
-                        </>
-                      )
-                    }
+                          </>
+                        )}
                   </p>
                 </div>
               </div>
@@ -572,7 +668,13 @@ function CommandBuilderQuestion({
       {/* Input Area */}
       <div className="space-y-2">
         <label className="text-white text-sm font-medium">
-          Your {showFFPlayPreview ? 'FFPLAY' : showFFProbePreview ? 'FFPROBE' : 'FFMPEG'} Command:
+          Your{' '}
+          {showFFPlayPreview
+            ? 'FFPLAY'
+            : showFFProbePreview
+              ? 'FFPROBE'
+              : 'FFMPEG'}{' '}
+          Command:
         </label>
         <div className="flex gap-2">
           <input
@@ -599,14 +701,19 @@ function CommandBuilderQuestion({
             onKeyDown={(e) => {
               if (e.key === 'Enter' && !e.shiftKey) {
                 e.preventDefault();
-                testCommand();
+                void testCommand();
               }
             }}
             disabled={hasAnswered && status === 'correct'}
           />
           <button
             onClick={testCommand}
-            disabled={!userCommand.trim() || status === 'checking' || isPreviewProcessing || (hasAnswered && status === 'correct')}
+            disabled={
+              !userCommand.trim() ||
+              status === 'checking' ||
+              isPreviewProcessing ||
+              (hasAnswered && status === 'correct')
+            }
             className="bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 text-white px-6 py-2 rounded-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {status === 'checking' || isPreviewProcessing ? (
@@ -636,18 +743,22 @@ function CommandBuilderQuestion({
 
       {/* Feedback */}
       {status !== 'idle' && (
-        <div className={`p-4 rounded-lg flex items-start gap-3 ${
-          status === 'correct' 
-            ? 'bg-green-900/30 border border-green-500/50' 
-            : 'bg-red-900/30 border border-red-500/50'
-        }`}>
+        <div
+          className={`p-4 rounded-lg flex items-start gap-3 ${
+            status === 'correct'
+              ? 'bg-green-900/30 border border-green-500/50'
+              : 'bg-red-900/30 border border-red-500/50'
+          }`}
+        >
           {status === 'correct' ? (
             <div className="h-5 w-5 text-green-400 flex-shrink-0 mt-0.5">✓</div>
           ) : (
             <div className="h-5 w-5 text-red-400 flex-shrink-0 mt-0.5">✗</div>
           )}
           <div className="flex-1">
-            <p className={`text-sm ${status === 'correct' ? 'text-green-300' : 'text-red-300'}`}>
+            <p
+              className={`text-sm ${status === 'correct' ? 'text-green-300' : 'text-red-300'}`}
+            >
               {feedback}
             </p>
             {errorType === 'syntax' && (
@@ -657,16 +768,21 @@ function CommandBuilderQuestion({
             )}
             {errorType === 'validation' && (
               <p className="text-red-200 text-xs mt-2">
-                Review the requirements and hints above to see what's missing.
+                Review the requirements and hints above to see what&apos;s
+                missing.
               </p>
             )}
             {status === 'correct' && challengeBlock.solution && (
               <div className="mt-2 p-2 bg-white/5 rounded">
-                <p className="text-gray-300 text-xs font-mono">{challengeBlock.solution}</p>
+                <p className="text-gray-300 text-xs font-mono">
+                  {challengeBlock.solution}
+                </p>
               </div>
             )}
             {question.explanation && status === 'correct' && (
-              <p className="text-gray-300 text-xs mt-2">{question.explanation}</p>
+              <p className="text-gray-300 text-xs mt-2">
+                {question.explanation}
+              </p>
             )}
           </div>
         </div>
@@ -686,14 +802,18 @@ function CommandBuilderQuestion({
             Show Hint
           </button>
         )}
-        
+
         {showHint && challengeBlock.hints.length > 0 && (
           <div className="bg-yellow-900/20 border border-yellow-500/30 rounded-lg p-3">
             <div className="flex items-start gap-2 mb-2">
               <span className="text-yellow-400">💡</span>
-              <p className="text-yellow-300 text-sm font-semibold">Hint {hintIndex + 1}:</p>
+              <p className="text-yellow-300 text-sm font-semibold">
+                Hint {hintIndex + 1}:
+              </p>
             </div>
-            <p className="text-yellow-200 text-sm ml-6">{challengeBlock.hints[hintIndex]}</p>
+            <p className="text-yellow-200 text-sm ml-6">
+              {challengeBlock.hints[hintIndex]}
+            </p>
             {hintIndex < challengeBlock.hints.length - 1 && (
               <button
                 onClick={showNextHint}

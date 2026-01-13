@@ -2,7 +2,7 @@
  * Query utilities for tutorial lessons
  */
 
-import { Lesson, Module } from '../types';
+import { type Lesson, type Module } from '../types';
 import { lessons, modules } from '../data';
 
 /**

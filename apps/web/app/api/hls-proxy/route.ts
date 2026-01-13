@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { type NextRequest, NextResponse } from 'next/server';
 
 export async function GET(request: NextRequest) {
   try {
@@ -15,7 +15,7 @@ export async function GET(request: NextRequest) {
     if (playlistUrl.includes('/api/hls-proxy')) {
       console.error('[HLS Proxy] ERROR: URL contains proxy path, this should not happen!', playlistUrl);
       // Extract the actual URL from the malformed URL
-      const match = playlistUrl.match(/url=(.+)$/);
+      const match = /url=(.+)$/.exec(playlistUrl);
       if (match) {
         const actualUrl = decodeURIComponent(match[1]);
         console.log('[HLS Proxy] Extracted actual URL:', actualUrl);
@@ -36,7 +36,7 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    const contentType = response.headers.get('content-type') || '';
+    const contentType = response.headers.get('content-type') ?? '';
     const playlistContent = await response.text();
 
     console.log('[HLS Proxy] Content type:', contentType);
@@ -105,7 +105,7 @@ export async function GET(request: NextRequest) {
       if (trimmedLine.startsWith('#EXT-X-MAP:')) {
         console.log(`[HLS Proxy] Line ${index + 1}: Processing EXT-X-MAP tag`);
         // Extract URI from the tag
-        const uriMatch = trimmedLine.match(/URI="([^"]+)"/);
+        const uriMatch = /URI="([^"]+)"/.exec(trimmedLine);
         if (uriMatch) {
           const originalUri = uriMatch[1];
           const processedUri = processUrl(originalUri);
@@ -118,7 +118,7 @@ export async function GET(request: NextRequest) {
       
       // Handle #EXT-X-MEDIA tags (for alternate renditions)
       if (trimmedLine.startsWith('#EXT-X-MEDIA:')) {
-        const uriMatch = trimmedLine.match(/URI="([^"]+)"/);
+        const uriMatch = /URI="([^"]+)"/.exec(trimmedLine);
         if (uriMatch) {
           const originalUri = uriMatch[1];
           const processedUri = processUrl(originalUri);
@@ -131,7 +131,7 @@ export async function GET(request: NextRequest) {
       
       // Handle #EXT-X-I-FRAME-STREAM-INF tags
       if (trimmedLine.startsWith('#EXT-X-I-FRAME-STREAM-INF:')) {
-        const uriMatch = trimmedLine.match(/URI="([^"]+)"/);
+        const uriMatch = /URI="([^"]+)"/.exec(trimmedLine);
         if (uriMatch) {
           const originalUri = uriMatch[1];
           const processedUri = processUrl(originalUri);

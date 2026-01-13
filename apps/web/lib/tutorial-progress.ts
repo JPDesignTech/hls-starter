@@ -1,7 +1,7 @@
 // Tutorial progress tracking with localStorage
 // Designed to be easily migrated to backend API later
 
-import { QuizScore } from './tutorial/types/module-quiz';
+import { type QuizScore } from './tutorial/types/module-quiz';
 
 export interface TutorialProgress {
   completedLessons: string[]; // Array of lesson IDs
@@ -38,12 +38,12 @@ export function getProgress(): TutorialProgress {
       const progress = JSON.parse(stored) as TutorialProgress;
       // Ensure all required fields exist
       return {
-        completedLessons: progress.completedLessons || [],
-        currentLesson: progress.currentLesson || null,
-        quizScores: progress.quizScores || {},
-        challengeCompleted: progress.challengeCompleted || {},
-        moduleQuizScores: progress.moduleQuizScores || {},
-        lastUpdated: progress.lastUpdated || Date.now()
+        completedLessons: progress.completedLessons ?? [],
+        currentLesson: progress.currentLesson ?? null,
+        quizScores: progress.quizScores ?? {},
+        challengeCompleted: progress.challengeCompleted ?? {},
+        moduleQuizScores: progress.moduleQuizScores ?? {},
+        lastUpdated: progress.lastUpdated || Date.now(),
       };
     }
   } catch (error) {

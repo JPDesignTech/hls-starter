@@ -1,4 +1,4 @@
-import { Module } from '@/lib/tutorial/types';
+import { type Module } from '@/lib/tutorial/types';
 import { videoCodecs } from './video-codecs';
 import { qualityControl } from './quality-control';
 import { filteringBasics } from './filtering-basics';

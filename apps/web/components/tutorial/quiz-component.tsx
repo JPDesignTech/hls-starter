@@ -4,7 +4,7 @@ import * as React from 'react';
 import { CheckCircle, XCircle, AlertCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { QuizBlock } from '@/lib/tutorial';
+import { type QuizBlock } from '@/lib/tutorial';
 import { recordQuizScore } from '@/lib/tutorial-progress';
 
 interface QuizComponentProps {
@@ -26,7 +26,7 @@ export function QuizComponent({ block, lessonId, onComplete, onAnswer }: QuizCom
     setShowExplanation(true);
     
     const selected = block.options.find(opt => opt.id === selectedOption);
-    const isCorrect = selected?.correct || false;
+    const isCorrect = selected?.correct ?? false;
     
     // Calculate score (100% if correct, 0% if incorrect)
     const score = isCorrect ? 100 : 0;
@@ -51,7 +51,7 @@ export function QuizComponent({ block, lessonId, onComplete, onAnswer }: QuizCom
   const selectedOptionData = selectedOption 
     ? block.options.find(opt => opt.id === selectedOption)
     : null;
-  const isCorrect = selectedOptionData?.correct || false;
+  const isCorrect = selectedOptionData?.correct ?? false;
 
   return (
     <Card className="bg-purple-900/30 border border-purple-600/30 rounded-xl p-6">

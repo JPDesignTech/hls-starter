@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { type NextRequest, NextResponse } from 'next/server';
 import { writeFile, mkdir } from 'fs/promises';
 import path from 'path';
 import { v4 as uuidv4 } from 'uuid';
@@ -17,7 +17,7 @@ export async function POST(request: NextRequest) {
   try {
     const formData = await request.formData();
     const video = formData.get('video') as File;
-    const videoId = formData.get('videoId') as string || uuidv4();
+    const videoId = formData.get('videoId') as string ?? uuidv4();
 
     if (!video) {
       return NextResponse.json(

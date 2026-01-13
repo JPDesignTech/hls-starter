@@ -3,7 +3,7 @@
 import * as React from 'react';
 import { ChevronLeft, ChevronRight, CheckCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { ContentBlock, Lesson } from '@/lib/tutorial';
+import { type ContentBlock, type Lesson } from '@/lib/tutorial';
 import { CodeExample } from './code-example';
 import { InteractiveChallenge } from './interactive-challenge';
 import { QuizComponent } from './quiz-component';

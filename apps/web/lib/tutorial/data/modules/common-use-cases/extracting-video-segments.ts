@@ -1,4 +1,4 @@
-import { Lesson } from '@/lib/tutorial/types';
+import { type Lesson } from '@/lib/tutorial/types';
 
 export const extractingVideoSegments: Lesson = {
   id: 'extracting-video-segments',

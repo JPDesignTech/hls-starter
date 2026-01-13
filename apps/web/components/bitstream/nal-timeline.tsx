@@ -76,7 +76,10 @@ export function NALTimeline({ nalUnits, onNALClick }: NALTimelineProps) {
   const [viewMode, setViewMode] = React.useState<'grouped' | 'sequential'>('grouped');
 
   return (
-    <Card className="bg-white/15 border-white/20" style={{ isolation: 'isolate', contain: 'layout style paint' }}>
+    <Card
+      className="bg-white/15 border-white/20"
+      style={{ isolation: 'isolate', contain: 'layout style paint' }}
+    >
       <CardHeader>
         <div className="flex items-center justify-between">
           <CardTitle className="text-white flex items-center gap-2">
@@ -127,15 +130,21 @@ export function NALTimeline({ nalUnits, onNALClick }: NALTimelineProps) {
                     borderRadius: '8px',
                   }}
                   labelStyle={{ color: '#fff' }}
-                  formatter={(value: any, name: string) => {
+                  formatter={(value: number | string, name: string) => {
                     if (name === 'count') {
                       return [value, 'Count'];
                     }
                     if (name === 'totalSize') {
-                      return [`${value.toLocaleString()} bytes`, 'Total Size'];
+                      return [
+                        `${(value as number).toLocaleString()} bytes`,
+                        'Total Size',
+                      ];
                     }
                     if (name === 'avgSize') {
-                      return [`${value.toLocaleString()} bytes`, 'Avg Size'];
+                      return [
+                        `${(value as number).toLocaleString()} bytes`,
+                        'Avg Size',
+                      ];
                     }
                     return [value, name];
                   }}
@@ -148,7 +157,7 @@ export function NALTimeline({ nalUnits, onNALClick }: NALTimelineProps) {
                 </Bar>
               </BarChart>
             </ResponsiveContainer>
-            
+
             {/* Statistics Table */}
             <div className="mt-6 overflow-x-auto">
               <table className="w-full text-sm">
@@ -156,13 +165,18 @@ export function NALTimeline({ nalUnits, onNALClick }: NALTimelineProps) {
                   <tr className="border-b border-white/10">
                     <th className="text-left py-2 text-gray-300">NAL Type</th>
                     <th className="text-right py-2 text-gray-300">Count</th>
-                    <th className="text-right py-2 text-gray-300">Total Size</th>
+                    <th className="text-right py-2 text-gray-300">
+                      Total Size
+                    </th>
                     <th className="text-right py-2 text-gray-300">Avg Size</th>
                   </tr>
                 </thead>
                 <tbody>
                   {timelineData.map((item, idx) => (
-                    <tr key={idx} className="border-b border-white/5 hover:bg-white/5">
+                    <tr
+                      key={idx}
+                      className="border-b border-white/5 hover:bg-white/5"
+                    >
                       <td className="py-2 text-white">
                         <div className="flex items-center gap-2">
                           <div
@@ -194,11 +208,21 @@ export function NALTimeline({ nalUnits, onNALClick }: NALTimelineProps) {
                 <XAxis
                   dataKey="index"
                   tick={{ fill: '#9ca3af', fontSize: 12 }}
-                  label={{ value: 'NAL Unit Index', position: 'insideBottom', offset: -5, fill: '#9ca3af' }}
+                  label={{
+                    value: 'NAL Unit Index',
+                    position: 'insideBottom',
+                    offset: -5,
+                    fill: '#9ca3af',
+                  }}
                 />
                 <YAxis
                   tick={{ fill: '#9ca3af' }}
-                  label={{ value: 'Size (bytes)', angle: -90, position: 'insideLeft', fill: '#9ca3af' }}
+                  label={{
+                    value: 'Size (bytes)',
+                    angle: -90,
+                    position: 'insideLeft',
+                    fill: '#9ca3af',
+                  }}
                 />
                 <Tooltip
                   contentStyle={{
@@ -207,15 +231,22 @@ export function NALTimeline({ nalUnits, onNALClick }: NALTimelineProps) {
                     borderRadius: '8px',
                   }}
                   labelStyle={{ color: '#fff' }}
-                  formatter={(value: any) => [`${value.toLocaleString()} bytes`, 'Size']}
+                  formatter={(value: number) => [
+                    `${value.toLocaleString()} bytes`,
+                    'Size',
+                  ]}
                   labelFormatter={(label) => `NAL Unit #${label}`}
                 />
                 <Bar
                   dataKey="size"
                   name="Size"
-                  onClick={(data: any) => {
+                  onClick={(data: { offset?: number | string }) => {
                     if (onNALClick && data.offset !== undefined) {
-                      onNALClick(data.offset);
+                      onNALClick(
+                        typeof data.offset === 'number'
+                          ? data.offset
+                          : parseInt(String(data.offset))
+                      );
                     }
                   }}
                   cursor="pointer"
@@ -226,14 +257,14 @@ export function NALTimeline({ nalUnits, onNALClick }: NALTimelineProps) {
                 </Bar>
               </BarChart>
             </ResponsiveContainer>
-            
+
             <div className="mt-4 text-xs text-gray-400">
               <p>Click on a bar to jump to that NAL unit in the hex viewer.</p>
               <p>Total: {nalUnits.length} NAL units</p>
             </div>
           </div>
         )}
-        
+
         {/* Legend */}
         <div className="mt-6 flex flex-wrap gap-4 text-xs">
           <div className="flex items-center gap-2">

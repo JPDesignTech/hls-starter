@@ -4,7 +4,10 @@ import * as React from 'react';
 import { Trophy, CheckCircle, XCircle, RotateCcw, ArrowRight, BarChart3 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { QuizScore, ModuleQuizQuestion } from '@/lib/tutorial/types/module-quiz';
+import {
+  type QuizScore,
+  type ModuleQuizQuestion,
+} from '@/lib/tutorial/types/module-quiz';
 import { isPassingScore } from '@/lib/tutorial/utils/quiz-scoring';
 
 interface QuizResultsProps {
@@ -59,13 +62,19 @@ export function QuizResults({
           )}
         </div>
         <CardTitle className="text-white text-2xl mb-2">
-          {isPerfect ? 'Perfect Score! 🎉' : passed ? 'Quiz Passed! ✅' : 'Quiz Not Passed'}
+          {isPerfect
+            ? 'Perfect Score! 🎉'
+            : passed
+              ? 'Quiz Passed! ✅'
+              : 'Quiz Not Passed'}
         </CardTitle>
         <div className="text-4xl font-bold text-white mb-2">{score.score}%</div>
         <p className="text-gray-300 text-sm">
           Passing Score: {passingScore}% | Attempt #{score.attempts}
           {score.bestScore !== score.score && (
-            <span className="ml-2 text-purple-400">Best: {score.bestScore}%</span>
+            <span className="ml-2 text-purple-400">
+              Best: {score.bestScore}%
+            </span>
           )}
         </p>
       </CardHeader>
@@ -82,7 +91,9 @@ export function QuizResults({
           {mcTotal > 0 && (
             <div className="space-y-1">
               <div className="flex items-center justify-between">
-                <span className="text-gray-300 text-sm">Multiple Choice Questions</span>
+                <span className="text-gray-300 text-sm">
+                  Multiple Choice Questions
+                </span>
                 <span className="text-white font-medium">
                   {mcCorrect}/{mcTotal} correct
                 </span>
@@ -100,7 +111,9 @@ export function QuizResults({
           {cbTotal > 0 && (
             <div className="space-y-1">
               <div className="flex items-center justify-between">
-                <span className="text-gray-300 text-sm">Command Builder Questions</span>
+                <span className="text-gray-300 text-sm">
+                  Command Builder Questions
+                </span>
                 <span className="text-white font-medium">
                   {cbCorrect}/{cbTotal} correct
                 </span>
@@ -123,7 +136,9 @@ export function QuizResults({
             <div className="w-full bg-purple-950/50 rounded-full h-3">
               <div
                 className={`h-3 rounded-full transition-all ${
-                  passed ? 'bg-gradient-to-r from-green-500 to-emerald-500' : 'bg-gradient-to-r from-red-500 to-orange-500'
+                  passed
+                    ? 'bg-gradient-to-r from-green-500 to-emerald-500'
+                    : 'bg-gradient-to-r from-red-500 to-orange-500'
                 }`}
                 style={{ width: `${score.score}%` }}
               />
@@ -143,11 +158,13 @@ export function QuizResults({
                   className="flex items-center justify-between p-2 rounded bg-white/5"
                 >
                   <div className="flex items-center gap-2 flex-1 min-w-0">
-                    <span className="text-white/60 text-sm w-6">#{index + 1}</span>
+                    <span className="text-white/60 text-sm w-6">
+                      #{index + 1}
+                    </span>
                     <span className="text-white text-sm truncate">
                       {question?.type === 'multiple-choice'
-                        ? (question as Extract<ModuleQuizQuestion, { type: 'multiple-choice' }>).question
-                        : (question as Extract<ModuleQuizQuestion, { type: 'command-builder' }>).title}
+                        ? question.question
+                        : question!.title}
                     </span>
                   </div>
                   <div className="flex items-center gap-2">
@@ -202,7 +219,8 @@ export function QuizResults({
         {!passed && (
           <div className="bg-yellow-900/20 border border-yellow-500/30 rounded-lg p-4">
             <p className="text-yellow-200 text-sm text-center">
-              Don't worry! Review the module lessons and try again. You need {passingScore}% to pass.
+              Don&apos;t worry! Review the module lessons and try again. You
+              need {passingScore}% to pass.
             </p>
           </div>
         )}

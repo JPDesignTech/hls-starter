@@ -1,7 +1,8 @@
 'use client';
 
 import * as React from 'react';
-import { ModuleQuiz, ModuleQuizQuestion, QuestionResult, QuizScore } from '@/lib/tutorial/types/module-quiz';
+import { type ModuleQuiz, ModuleQuizQuestion, type QuizScore } from '@/lib/tutorial/types/module-quiz';
+import { type QuestionResult } from '@/lib/tutorial/utils/quiz-scoring';
 import { QuizQuestionWrapper } from './quiz-question-wrapper';
 import { QuizResults } from './quiz-results';
 import { calculateQuizScore, validateMultipleChoice, validateCommandBuilder } from '@/lib/tutorial/utils/quiz-scoring';

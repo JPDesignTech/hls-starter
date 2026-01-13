@@ -432,7 +432,7 @@ export function getDocumentationUrl(flag: string, category: FlagCategory): strin
   }
   
   // Fall back to category-based section
-  const section = categoryToSection[category] || '#main-options';
+  const section = categoryToSection[category] ?? '#main-options';
   return `${DOCUMENTATION_BASE_URL}${section}`;
 }
 
@@ -462,7 +462,7 @@ export function getFlagExplanation(flag: string): FlagExplanation | undefined {
   if (explanation) {
     return {
       ...explanation,
-      documentationUrl: explanation.documentationUrl || getDocumentationUrl(flag, explanation.category),
+      documentationUrl: explanation.documentationUrl ?? getDocumentationUrl(flag, explanation.category),
     };
   }
   

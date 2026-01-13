@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { type NextRequest, NextResponse } from 'next/server';
 import { kv } from '@/lib/redis';
 
 interface QualityLevel {
@@ -41,13 +41,13 @@ function parseHLSManifest(content: string, baseUrl: string): {
     // Parse quality levels from master playlist
     for (let i = 0; i < lines.length; i++) {
       if (lines[i].startsWith('#EXT-X-STREAM-INF')) {
-        const bandwidthMatch = lines[i].match(/BANDWIDTH=(\d+)/);
-        const resolutionMatch = lines[i].match(/RESOLUTION=([^,\s]+)/);
-        const codecsMatch = lines[i].match(/CODECS="([^"]+)"/);
+        const bandwidthMatch = /BANDWIDTH=(\d+)/.exec(lines[i]);
+        const resolutionMatch = /RESOLUTION=([^,\s]+)/.exec(lines[i]);
+        const codecsMatch = /CODECS="([^"]+)"/.exec(lines[i]);
         
         if (i + 1 < lines.length && !lines[i + 1].startsWith('#')) {
           const uri = lines[i + 1];
-          let resolution = resolutionMatch?.[1] || '';
+          let resolution = resolutionMatch?.[1] ?? '';
           let qualityName = 'Unknown';
           
           // Handle different patterns for quality naming
@@ -89,8 +89,8 @@ function parseHLSManifest(content: string, baseUrl: string): {
           
           qualityLevels.push({
             name: qualityName,
-            bandwidth: parseInt(bandwidthMatch?.[1] || '0'),
-            resolution: resolution || 'Unknown',
+            bandwidth: parseInt(bandwidthMatch?.[1] ?? '0'),
+            resolution: resolution ?? 'Unknown',
             uri: uri
           });
         }
@@ -112,7 +112,7 @@ function parseHLSManifest(content: string, baseUrl: string): {
 
 // Resolve relative URLs to absolute URLs
 function resolveUrl(relativeUrl: string, baseUrl: string): string {
-  if (relativeUrl.startsWith('http://') || relativeUrl.startsWith('https://')) {
+  if (relativeUrl.startsWith('http://') ?? relativeUrl.startsWith('https://')) {
     return relativeUrl;
   }
   
@@ -145,16 +145,16 @@ export async function POST(request: NextRequest) {
     }
 
     // Parse the URL to extract the actual HLS URL (remove proxy wrapper if present)
-    let actualHlsUrl = originalUrl || url;
+    let actualHlsUrl = originalUrl ?? url;
     if (url.includes('/api/hls-proxy')) {
       const urlParams = new URLSearchParams(url.split('?')[1]);
-      actualHlsUrl = urlParams.get('url') || actualHlsUrl;
+      actualHlsUrl = urlParams.get('url') ?? actualHlsUrl;
     }
 
     // Fetch the HLS manifest
     let qualityLevels: QualityLevel[] = [];
     let files: HLSFile[] = [];
-    let processedAt = new Date().toISOString();
+    const processedAt = new Date().toISOString();
     
     try {
       console.log(`[Store HLS] Fetching manifest from: ${actualHlsUrl}`);
@@ -171,7 +171,7 @@ export async function POST(request: NextRequest) {
           for (const quality of qualityLevels) {
             const variantUrl = resolveUrl(quality.uri, actualHlsUrl);
             files.push({
-              name: quality.uri.split('/').pop() || quality.uri,
+              name: quality.uri.split('/').pop() ?? quality.uri,
               url: `/api/hls-proxy?url=${encodeURIComponent(variantUrl)}`,
               size: 0, // We don't know the size without fetching
               type: 'playlist'
@@ -193,7 +193,7 @@ export async function POST(request: NextRequest) {
       id: videoId,
       url,
       originalUrl: actualHlsUrl,
-      title: title || 'HLS Stream',
+      title: title ?? 'HLS Stream',
       isOriginal: false,
       isHLS: true,
       createdAt: new Date().toISOString(),

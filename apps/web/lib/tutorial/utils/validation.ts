@@ -2,7 +2,7 @@
  * Validation utilities for tutorial content
  */
 
-import { Lesson, ContentBlock } from '../types';
+import { type Lesson, type ContentBlock } from '../types';
 
 /**
  * Validate a lesson structure

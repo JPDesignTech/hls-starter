@@ -3,7 +3,7 @@
 import * as React from 'react';
 import { MermaidDiagram } from './mermaid-diagram';
 import { ReactFlowDiagram, ReactFlowDiagramProps } from './react-flow-diagram';
-import { Node, Edge } from 'reactflow';
+import { type Node, type Edge } from 'reactflow';
 
 export interface DiagramVisualizerProps {
   diagram: string; // Mermaid syntax or JSON string for React Flow
@@ -48,7 +48,7 @@ export function DiagramVisualizer({
     }
 
     // If reactFlowData is provided with valid nodes, use React Flow
-    if (reactFlowData && reactFlowData.nodes && Array.isArray(reactFlowData.nodes) && reactFlowData.nodes.length > 0) {
+    if (reactFlowData?.nodes && Array.isArray(reactFlowData.nodes) && reactFlowData.nodes.length > 0) {
       if (reactFlowData.edges && Array.isArray(reactFlowData.edges) && reactFlowData.edges.length > 0) {
         return 'react-flow';
       }
@@ -87,7 +87,7 @@ export function DiagramVisualizer({
       ) {
         // Validate node structure
         const hasValidNodes = parsed.nodes.every((node: any) => 
-          node && typeof node === 'object' && (node.id || node.data)
+          node && typeof node === 'object' && (node.id ?? node.data)
         );
         if (hasValidNodes) {
           return 'react-flow';
@@ -108,7 +108,7 @@ export function DiagramVisualizer({
         id: node.id,
         data: { label: node.label },
         position: node.position,
-        type: node.type || 'default',
+        type: node.type ?? 'default',
         style: node.style,
       }));
     }
@@ -119,9 +119,9 @@ export function DiagramVisualizer({
       if (parsed.nodes && Array.isArray(parsed.nodes)) {
         return parsed.nodes.map((node: any) => ({
           id: node.id,
-          data: { label: node.label || node.data?.label || node.id },
-          position: node.position || { x: 0, y: 0 },
-          type: node.type || 'default',
+          data: { label: node.label ?? node.data?.label ?? node.id },
+          position: node.position ?? { x: 0, y: 0 },
+          type: node.type ?? 'default',
           style: node.style,
         }));
       }
@@ -148,7 +148,7 @@ export function DiagramVisualizer({
       const parsed = JSON.parse(diagram);
       if (parsed.edges && Array.isArray(parsed.edges)) {
         return parsed.edges.map((edge: any) => ({
-          id: edge.id || `${edge.source}-${edge.target}`,
+          id: edge.id ?? `${edge.source}-${edge.target}`,
           source: edge.source,
           target: edge.target,
           label: edge.label,

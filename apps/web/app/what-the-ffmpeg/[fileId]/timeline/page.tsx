@@ -14,6 +14,7 @@ import {
   BarChart3
 } from 'lucide-react';
 import Link from 'next/link';
+import type { FfprobeFormat } from 'fluent-ffmpeg';
 
 interface FileMetadata {
   fileId: string;
@@ -28,8 +29,8 @@ interface FileMetadata {
 }
 
 interface ProbeData {
-  format?: any;
-  streams?: any[];
+  format?: unknown;
+  streams?: unknown[];
 }
 
 export default function TimelinePage() {
@@ -42,7 +43,7 @@ export default function TimelinePage() {
   const [error, setError] = React.useState<string | null>(null);
 
   React.useEffect(() => {
-    loadData();
+    void loadData();
   }, [fileId]);
 
   const loadData = async () => {
@@ -106,7 +107,7 @@ export default function TimelinePage() {
     );
   }
 
-  const duration = probeData?.format?.duration ? parseFloat(probeData.format.duration) : null;
+  const duration = (probeData?.format as FfprobeFormat | undefined)?.duration ?? null;
 
   return (
     <div className="min-h-screen relative">

@@ -49,15 +49,15 @@ export function FilterGraphVisualizer({
 
         filters.forEach((filter, index) => {
           // Extract stream labels (e.g., [label])
-          const inputMatches = filter.match(/\[([^\]]+)\]/g) || [];
-          const outputMatch = filter.match(/\[([^\]]+)\]$/);
+          const inputMatches = filter.match(/\[([^\]]+)\]/g) ?? [];
+          const outputMatch = /\[([^\]]+)\]$/.exec(filter);
           
           // Extract filter name (before first = or [)
-          const filterNameMatch = filter.match(/^\[?([^\]=]+)/);
+          const filterNameMatch = /^\[?([^\]=]+)/.exec(filter);
           const filterName = filterNameMatch ? filterNameMatch[1].trim() : 'unknown';
           
           // Extract parameters (after =)
-          const paramsMatch = filter.match(/=([^\[]+)/);
+          const paramsMatch = /=([^\[]+)/.exec(filter);
           const params = paramsMatch ? paramsMatch[1].trim() : undefined;
 
           const nodeId = `node-${nodes.length}`;

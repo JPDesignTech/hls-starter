@@ -1,4 +1,4 @@
-import { Storage } from '@google-cloud/storage';
+import { type Storage } from '@google-cloud/storage';
 import path from 'path';
 import { promises as fs } from 'fs';
 import { createStorage } from './gcs-config';
@@ -24,7 +24,7 @@ function getStorage(): Storage | null {
   return storage;
 }
 
-const bucketName = process.env.GCS_BUCKET_NAME || 'hls-demo-segments';
+const bucketName = process.env.GCS_BUCKET_NAME ?? 'hls-demo-segments';
 
 export interface UploadOptions {
   localPath: string;
@@ -60,7 +60,7 @@ export async function uploadFile(options: UploadOptions): Promise<StorageFile> {
       name: remotePath,
       url: `/streams/${urlPath}`,
       size: stats.size,
-      contentType: contentType || 'application/octet-stream',
+      contentType: contentType ?? 'application/octet-stream',
       created: stats.birthtime,
     };
   }
@@ -73,8 +73,8 @@ export async function uploadFile(options: UploadOptions): Promise<StorageFile> {
   
   await file.save(await fs.readFile(localPath), {
     metadata: {
-      contentType: contentType || 'application/octet-stream',
-      cacheControl: cacheControl || 'public, max-age=3600',
+      contentType: contentType ?? 'application/octet-stream',
+      cacheControl: cacheControl ?? 'public, max-age=3600',
     },
   });
   
@@ -87,9 +87,9 @@ export async function uploadFile(options: UploadOptions): Promise<StorageFile> {
   return {
     name: remotePath,
     url: `https://storage.googleapis.com/${bucketName}/${gcsPath}`,
-    size: parseInt(metadata.size as string) || 0,
-    contentType: metadata.contentType || 'application/octet-stream',
-    created: new Date(metadata.timeCreated || Date.now()),
+    size: parseInt(metadata.size as string) ?? 0,
+    contentType: metadata.contentType ?? 'application/octet-stream',
+    created: new Date(metadata.timeCreated ?? Date.now()),
   };
 }
 
@@ -163,7 +163,7 @@ export async function deleteFiles(remotePaths: string[]): Promise<void> {
 // Get signed URL for private content (optional security feature)
 export async function getSignedUrl(
   remotePath: string,
-  expiresInMinutes: number = 60
+  expiresInMinutes = 60
 ): Promise<string> {
   const storage = getStorage();
   if (!storage) {

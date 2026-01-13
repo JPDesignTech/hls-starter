@@ -47,7 +47,7 @@ interface AnalysisResult {
     resolution?: string;
     fps?: number;
   };
-  rawOutput?: any;
+  rawOutput?: unknown;
   analyzedAt: string;
 }
 
@@ -167,7 +167,7 @@ export default function CorruptionCheckPage() {
       
       if (!analysisResponse.ok) {
         const errorData = await analysisResponse.json();
-        throw new Error(errorData.error || 'Analysis failed');
+        throw new Error(errorData.error ?? 'Analysis failed');
       }
       
       const result = await analysisResponse.json();
@@ -397,7 +397,7 @@ export default function CorruptionCheckPage() {
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
                   <div className="bg-black/30 rounded-lg p-3">
                     <p className="text-sm text-gray-400">Format</p>
-                    <p className="text-white font-mono">{result.metadata.format || 'Unknown'}</p>
+                    <p className="text-white font-mono">{result.metadata.format ?? 'Unknown'}</p>
                   </div>
                   <div className="bg-black/30 rounded-lg p-3">
                     <p className="text-sm text-gray-400">Duration</p>
@@ -407,7 +407,7 @@ export default function CorruptionCheckPage() {
                   </div>
                   <div className="bg-black/30 rounded-lg p-3">
                     <p className="text-sm text-gray-400">Resolution</p>
-                    <p className="text-white font-mono">{result.metadata.resolution || 'Unknown'}</p>
+                    <p className="text-white font-mono">{result.metadata.resolution ?? 'Unknown'}</p>
                   </div>
                   <div className="bg-black/30 rounded-lg p-3">
                     <p className="text-sm text-gray-400">Bitrate</p>
@@ -421,11 +421,11 @@ export default function CorruptionCheckPage() {
                 <div className="grid grid-cols-2 gap-4 mb-6">
                   <div className="bg-black/30 rounded-lg p-3">
                     <p className="text-sm text-gray-400">Video Codec</p>
-                    <p className="text-white font-mono">{result.metadata.videoCodec || 'None'}</p>
+                    <p className="text-white font-mono">{result.metadata.videoCodec ?? 'None'}</p>
                   </div>
                   <div className="bg-black/30 rounded-lg p-3">
                     <p className="text-sm text-gray-400">Audio Codec</p>
-                    <p className="text-white font-mono">{result.metadata.audioCodec || 'None'}</p>
+                    <p className="text-white font-mono">{result.metadata.audioCodec ?? 'None'}</p>
                   </div>
                 </div>
 

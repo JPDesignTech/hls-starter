@@ -142,12 +142,12 @@ export function MermaidDiagram({
         if (!isMounted) return;
         console.error('Mermaid rendering error:', err);
         const errorMessage = err instanceof Error ? err.message : 'Failed to render diagram';
-        setError(errorMessage || 'Unknown error occurred');
+        setError(errorMessage ?? 'Unknown error occurred');
         setIsRendered(false);
       }
     };
 
-    renderDiagram();
+    void renderDiagram();
 
     return () => {
       isMounted = false;

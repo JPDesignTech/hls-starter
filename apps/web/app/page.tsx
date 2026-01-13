@@ -3,7 +3,28 @@
 import * as React from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Zap, Video, ShieldCheck, Terminal, LucideIcon, Info, Download, Check, Star, Rocket, ArrowRight, Users, Camera, Heart, Target, Code, GraduationCap, Play, Award, BookOpen } from 'lucide-react';
+import {
+  Zap,
+  Video,
+  ShieldCheck,
+  Terminal,
+  type LucideIcon,
+  Info,
+  Download,
+  Check,
+  Star,
+  Rocket,
+  ArrowRight,
+  Users,
+  Camera,
+  Heart,
+  Target,
+  Code,
+  GraduationCap,
+  Play,
+  Award,
+  BookOpen,
+} from 'lucide-react';
 import Link from 'next/link';
 import ModuleSpecTips from '@/components/module-spec-tips';
 
@@ -86,13 +107,13 @@ export default function HomePage() {
           <div className="text-center mb-12">
             <div className="inline-flex items-center justify-center space-x-2 mb-4">
               <Zap className="h-10 w-10 text-yellow-400" />
-              <h1 className="text-5xl font-bold text-white">
-                BeemMeUp
-              </h1>
+              <h1 className="text-5xl font-bold text-white">BeemMeUp</h1>
             </div>
             <p className="text-lg text-gray-300 max-w-2xl mx-auto">
-              A comprehensive platform for video processing, HLS streaming, media analysis, and FFMPEG command building. 
-              Explore our tools to upload videos, analyze media files, check for corruption, and learn FFMPEG commands ✨
+              A comprehensive platform for video processing, HLS streaming,
+              media analysis, and FFMPEG command building. Explore our tools to
+              upload videos, analyze media files, check for corruption, and
+              learn FFMPEG commands ✨
             </p>
             <div className="max-w-3xl mx-auto mt-6">
               <ModuleSpecTips />
@@ -106,36 +127,46 @@ export default function HomePage() {
                 {/* Decorative elements */}
                 <div className="absolute top-0 right-0 w-64 h-64 bg-indigo-500/20 rounded-full blur-3xl"></div>
                 <div className="absolute bottom-0 left-0 w-64 h-64 bg-pink-500/20 rounded-full blur-3xl"></div>
-                
+
                 <div className="relative grid md:grid-cols-2 gap-8 items-center">
                   {/* Left Side - Content */}
                   <div>
                     <div className="inline-flex items-center gap-2 bg-indigo-500/30 border border-indigo-400/50 rounded-full px-4 py-1 mb-4">
                       <GraduationCap className="w-4 h-4 text-indigo-300" />
-                      <span className="text-indigo-200 text-sm">New Learning Path</span>
+                      <span className="text-indigo-200 text-sm">
+                        New Learning Path
+                      </span>
                     </div>
-                    
+
                     <h2 className="text-white text-4xl font-bold mb-4">
                       Interactive FFMPEG Tutorials
                     </h2>
-                    
+
                     <p className="text-white/80 text-lg mb-6 leading-relaxed">
-                      Master FFMPEG from the ground up with our comprehensive, interactive tutorial series. 
-                      Learn by doing with real-time command execution, visual examples, and hands-on challenges.
+                      Master FFMPEG from the ground up with our comprehensive,
+                      interactive tutorial series. Learn by doing with real-time
+                      command execution, visual examples, and hands-on
+                      challenges.
                     </p>
 
                     {/* Stats */}
                     <div className="grid grid-cols-3 gap-4 mb-6">
                       <div className="bg-white/10 backdrop-blur-sm rounded-lg p-3 border border-white/20">
-                        <div className="text-white text-2xl mb-1 font-bold">12</div>
+                        <div className="text-white text-2xl mb-1 font-bold">
+                          12
+                        </div>
                         <div className="text-white/60 text-sm">Lessons</div>
                       </div>
                       <div className="bg-white/10 backdrop-blur-sm rounded-lg p-3 border border-white/20">
-                        <div className="text-white text-2xl mb-1 font-bold">3h</div>
+                        <div className="text-white text-2xl mb-1 font-bold">
+                          3h
+                        </div>
                         <div className="text-white/60 text-sm">Duration</div>
                       </div>
                       <div className="bg-white/10 backdrop-blur-sm rounded-lg p-3 border border-white/20">
-                        <div className="text-white text-2xl mb-1 font-bold">24</div>
+                        <div className="text-white text-2xl mb-1 font-bold">
+                          24
+                        </div>
                         <div className="text-white/60 text-sm">Exercises</div>
                       </div>
                     </div>
@@ -155,32 +186,42 @@ export default function HomePage() {
                     <div className="bg-white/5 backdrop-blur-sm border border-white/20 rounded-xl p-6">
                       <div className="flex items-center gap-2 mb-4">
                         <BookOpen className="w-5 h-5 text-indigo-400" />
-                        <span className="text-white font-semibold">What You'll Learn</span>
+                        <span className="text-white font-semibold">
+                          What You&apos;ll Learn
+                        </span>
                       </div>
                       <ul className="space-y-3">
                         <li className="flex items-start gap-3">
                           <div className="w-6 h-6 rounded-full bg-green-500/20 border border-green-400/50 flex items-center justify-center flex-shrink-0 mt-0.5">
                             <span className="text-green-400 text-xs">✓</span>
                           </div>
-                          <span className="text-white/80 text-sm">FFMPEG fundamentals and architecture</span>
+                          <span className="text-white/80 text-sm">
+                            FFMPEG fundamentals and architecture
+                          </span>
                         </li>
                         <li className="flex items-start gap-3">
                           <div className="w-6 h-6 rounded-full bg-green-500/20 border border-green-400/50 flex items-center justify-center flex-shrink-0 mt-0.5">
                             <span className="text-green-400 text-xs">✓</span>
                           </div>
-                          <span className="text-white/80 text-sm">Essential flags and their usage</span>
+                          <span className="text-white/80 text-sm">
+                            Essential flags and their usage
+                          </span>
                         </li>
                         <li className="flex items-start gap-3">
                           <div className="w-6 h-6 rounded-full bg-green-500/20 border border-green-400/50 flex items-center justify-center flex-shrink-0 mt-0.5">
                             <span className="text-green-400 text-xs">✓</span>
                           </div>
-                          <span className="text-white/80 text-sm">Video/audio processing techniques</span>
+                          <span className="text-white/80 text-sm">
+                            Video/audio processing techniques
+                          </span>
                         </li>
                         <li className="flex items-start gap-3">
                           <div className="w-6 h-6 rounded-full bg-green-500/20 border border-green-400/50 flex items-center justify-center flex-shrink-0 mt-0.5">
                             <span className="text-green-400 text-xs">✓</span>
                           </div>
-                          <span className="text-white/80 text-sm font-medium">Real-world examples and best practices</span>
+                          <span className="text-white/80 text-sm font-medium">
+                            Real-world examples and best practices
+                          </span>
                         </li>
                       </ul>
                     </div>
@@ -189,8 +230,12 @@ export default function HomePage() {
                     <div className="bg-gradient-to-r from-yellow-500/20 to-orange-500/20 border border-yellow-400/50 rounded-xl p-4 flex items-center gap-3">
                       <Award className="w-8 h-8 text-yellow-400" />
                       <div>
-                        <div className="text-white text-sm font-semibold">Earn a certificate</div>
-                        <div className="text-white/60 text-xs">Complete all lessons to get certified</div>
+                        <div className="text-white text-sm font-semibold">
+                          Earn a certificate
+                        </div>
+                        <div className="text-white/60 text-xs">
+                          Complete all lessons to get certified
+                        </div>
                       </div>
                     </div>
                   </div>
@@ -203,9 +248,11 @@ export default function HomePage() {
           <div className="mb-12">
             <div className="text-center mb-8">
               <h2 className="text-4xl font-bold text-white mb-2">Our Tools</h2>
-              <p className="text-lg text-gray-300">Professional video processing and analysis tools</p>
+              <p className="text-lg text-gray-300">
+                Professional video processing and analysis tools
+              </p>
             </div>
-            
+
             {/* Feature Modules Grid (2x2) */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               {featureModules.map((module) => {
@@ -214,7 +261,10 @@ export default function HomePage() {
                   <Card
                     key={module.id}
                     className={`bg-gradient-to-br ${module.gradient} ${module.borderColor} border`}
-                    style={{ isolation: 'isolate', contain: 'layout style paint' }}
+                    style={{
+                      isolation: 'isolate',
+                      contain: 'layout style paint',
+                    }}
                   >
                     <CardHeader>
                       <CardTitle className="text-white flex items-center gap-2">
@@ -232,7 +282,9 @@ export default function HomePage() {
                         {module.longDescription}
                       </p>
                       <Link href={module.href}>
-                        <Button className={`w-full bg-gradient-to-r ${module.buttonGradient} text-white`}>
+                        <Button
+                          className={`w-full bg-gradient-to-r ${module.buttonGradient} text-white`}
+                        >
                           <Icon className="mr-2 h-4 w-4" />
                           Open {module.title}
                         </Button>
@@ -250,9 +302,14 @@ export default function HomePage() {
       <div id="about" className="relative bg-purple-950/50 py-24 scroll-mt-16">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center mb-12">
-            <h2 className="text-4xl font-bold text-white mb-4">About BeemMeUp</h2>
+            <h2 className="text-4xl font-bold text-white mb-4">
+              About BeemMeUp
+            </h2>
             <p className="text-lg text-gray-300 max-w-3xl mx-auto">
-              We're on a mission to make video processing accessible, educational, and powerful for everyone. BeemMeUp combines cutting-edge technology with an intuitive interface to help you master FFMPEG and media analysis.
+              We&apos;re on a mission to make video processing accessible,
+              educational, and powerful for everyone. BeemMeUp combines
+              cutting-edge technology with an intuitive interface to help you
+              master FFMPEG and media analysis.
             </p>
           </div>
 
@@ -305,9 +362,13 @@ export default function HomePage() {
                     <Target className="h-8 w-8 text-white" />
                   </div>
                 </div>
-                <h3 className="text-xl font-bold text-white text-center mb-3">Our Mission</h3>
+                <h3 className="text-xl font-bold text-white text-center mb-3">
+                  Our Mission
+                </h3>
                 <p className="text-gray-300 text-center text-sm leading-relaxed">
-                  Democratize video processing and FFMPEG knowledge. We believe everyone should have access to professional-grade media tools and the education to use them effectively.
+                  Democratize video processing and FFMPEG knowledge. We believe
+                  everyone should have access to professional-grade media tools
+                  and the education to use them effectively.
                 </p>
               </CardContent>
             </Card>
@@ -318,9 +379,13 @@ export default function HomePage() {
                     <Code className="h-8 w-8 text-white" />
                   </div>
                 </div>
-                <h3 className="text-xl font-bold text-white text-center mb-3">Built for Creators</h3>
+                <h3 className="text-xl font-bold text-white text-center mb-3">
+                  Built for Creators
+                </h3>
                 <p className="text-gray-300 text-center text-sm leading-relaxed">
-                  Whether you're a content creator, developer, or video professional, BeemMeUp provides the tools you need to analyze, process, and understand your media files.
+                  Whether you&apos;re a content creator, developer, or video
+                  professional, BeemMeUp provides the tools you need to analyze,
+                  process, and understand your media files.
                 </p>
               </CardContent>
             </Card>
@@ -331,9 +396,13 @@ export default function HomePage() {
                     <Heart className="h-8 w-8 text-white" />
                   </div>
                 </div>
-                <h3 className="text-xl font-bold text-white text-center mb-3">Community Driven</h3>
+                <h3 className="text-xl font-bold text-white text-center mb-3">
+                  Community Driven
+                </h3>
                 <p className="text-gray-300 text-center text-sm leading-relaxed">
-                  We listen to our users and continuously improve based on feedback. Our roadmap is shaped by the real needs of video professionals and enthusiasts.
+                  We listen to our users and continuously improve based on
+                  feedback. Our roadmap is shaped by the real needs of video
+                  professionals and enthusiasts.
                 </p>
               </CardContent>
             </Card>
@@ -342,12 +411,18 @@ export default function HomePage() {
       </div>
 
       {/* Pricing Section - Lighter Purple/Violet Backdrop */}
-      <div id="pricing" className="relative bg-violet-950/40 py-24 scroll-mt-16">
+      <div
+        id="pricing"
+        className="relative bg-violet-950/40 py-24 scroll-mt-16"
+      >
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center mb-12">
-            <h2 className="text-4xl font-bold text-white mb-4">Simple, Transparent Pricing</h2>
+            <h2 className="text-4xl font-bold text-white mb-4">
+              Simple, Transparent Pricing
+            </h2>
             <p className="text-lg text-gray-300 max-w-2xl mx-auto">
-              Choose the plan that fits your needs. Start free and upgrade as you grow.
+              Choose the plan that fits your needs. Start free and upgrade as
+              you grow.
             </p>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6 max-w-6xl mx-auto">
@@ -435,7 +510,9 @@ export default function HomePage() {
                   </li>
                   <li className="flex items-start gap-2">
                     <Check className="h-5 w-5 text-green-400 mt-0.5 flex-shrink-0" />
-                    <span className="text-sm">Unlimited file uploads (up to 5GB)</span>
+                    <span className="text-sm">
+                      Unlimited file uploads (up to 5GB)
+                    </span>
                   </li>
                   <li className="flex items-start gap-2">
                     <Check className="h-5 w-5 text-green-400 mt-0.5 flex-shrink-0" />
@@ -480,7 +557,9 @@ export default function HomePage() {
                 <div className="flex justify-center mb-4">
                   <Rocket className="h-10 w-10 text-white" />
                 </div>
-                <CardTitle className="text-white text-2xl mb-2">Enterprise</CardTitle>
+                <CardTitle className="text-white text-2xl mb-2">
+                  Enterprise
+                </CardTitle>
                 <CardDescription className="text-gray-300">
                   For teams and organizations
                 </CardDescription>
@@ -488,7 +567,9 @@ export default function HomePage() {
               <CardContent className="space-y-6">
                 <div className="text-center">
                   <div className="flex items-baseline justify-center gap-1">
-                    <span className="text-4xl font-bold text-white">Custom</span>
+                    <span className="text-4xl font-bold text-white">
+                      Custom
+                    </span>
                     <span className="text-gray-400 text-sm">/contact us</span>
                   </div>
                 </div>
@@ -523,7 +604,9 @@ export default function HomePage() {
                   </li>
                   <li className="flex items-start gap-2">
                     <Check className="h-5 w-5 text-green-400 mt-0.5 flex-shrink-0" />
-                    <span className="text-sm">On-premise deployment option</span>
+                    <span className="text-sm">
+                      On-premise deployment option
+                    </span>
                   </li>
                   <li className="flex items-start gap-2">
                     <Check className="h-5 w-5 text-green-400 mt-0.5 flex-shrink-0" />
@@ -538,12 +621,15 @@ export default function HomePage() {
               </CardContent>
             </Card>
           </div>
-          
+
           {/* Footer Text */}
           <div className="text-center mt-12">
             <p className="text-gray-300 text-sm">
               All plans include a 14-day free trial. No credit card required.{' '}
-              <Link href="/" className="text-purple-400 hover:text-purple-300 underline inline-flex items-center gap-1">
+              <Link
+                href="/"
+                className="text-purple-400 hover:text-purple-300 underline inline-flex items-center gap-1"
+              >
                 Compare all features
                 <ArrowRight className="h-4 w-4" />
               </Link>
@@ -559,15 +645,17 @@ export default function HomePage() {
               <h2 className="text-4xl font-bold text-white">Download</h2>
             </div>
             <p className="text-gray-300 max-w-2xl mx-auto">
-              Access BeemMeUp directly in your browser - no installation required.
+              Access BeemMeUp directly in your browser - no installation
+              required.
             </p>
           </div>
           <Card className="bg-gradient-to-br from-green-600/25 to-emerald-600/25 border-green-500/30 max-w-2xl mx-auto">
             <CardContent className="pt-6">
               <div className="text-center space-y-6">
                 <p className="text-lg text-gray-200">
-                  BeemMeUp is a web-based platform that runs entirely in your browser. Simply visit our website 
-                  to start using all our video processing tools - no downloads or installations needed.
+                  BeemMeUp is a web-based platform that runs entirely in your
+                  browser. Simply visit our website to start using all our video
+                  processing tools - no downloads or installations needed.
                 </p>
                 <div className="space-y-4">
                   <div className="flex items-center justify-center gap-3 text-gray-300">

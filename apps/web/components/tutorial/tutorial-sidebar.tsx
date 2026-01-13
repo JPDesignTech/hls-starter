@@ -4,7 +4,7 @@ import * as React from 'react';
 import { CheckCircle, Lock, Circle, ChevronDown, ChevronRight, Trophy, HelpCircle } from 'lucide-react';
 import { lessons, getModules, getLessonsByModule } from '@/lib/tutorial';
 import { modules } from '@/lib/tutorial/data';
-import { getProgress, isLessonCompleted, isLessonUnlocked, TutorialProgress, areAllModuleLessonsCompleted, getModuleQuizScore, isModuleQuizCompleted } from '@/lib/tutorial-progress';
+import { getProgress, isLessonCompleted, isLessonUnlocked, type TutorialProgress, areAllModuleLessonsCompleted, getModuleQuizScore, isModuleQuizCompleted } from '@/lib/tutorial-progress';
 import { getOverallProgress } from '@/lib/tutorial-progress';
 import { getModuleById } from '@/lib/tutorial/utils/queries';
 import Link from 'next/link';

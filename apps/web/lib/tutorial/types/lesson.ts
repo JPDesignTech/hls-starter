@@ -3,7 +3,7 @@
  * Represents a single tutorial lesson with its content and metadata
  */
 
-import { ContentBlock } from './content-blocks';
+import { type ContentBlock } from './content-blocks';
 
 export interface Lesson {
   id: string;

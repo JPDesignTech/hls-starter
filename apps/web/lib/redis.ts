@@ -14,7 +14,7 @@ let redisErrorCount = 0;
 const MAX_REDIS_ERRORS_BEFORE_FALLBACK = 3;
 
 // For now, let's export a simple in-memory store if Redis is not configured
-const inMemoryStore = new Map<string, any>();
+const inMemoryStore = new Map<string, unknown>();
 
 // Log Redis status
 if (redis) {
@@ -55,7 +55,7 @@ const createRedisWrapper = () => {
         return inMemoryStore.get(key);
       }
     },
-    set: async (key: string, value: any) => {
+    set: async (key: string, value: unknown) => {
       if (!redisAvailable) {
         inMemoryStore.set(key, value);
         return 'OK';
@@ -70,7 +70,7 @@ const createRedisWrapper = () => {
         return 'OK';
       }
     },
-    setex: async (key: string, seconds: number, value: any) => {
+    setex: async (key: string, seconds: number, value: unknown) => {
       if (!redisAvailable) {
         inMemoryStore.set(key, value);
         return 'OK';
@@ -119,13 +119,13 @@ const createRedisWrapper = () => {
   };
 };
 
-export const kv = createRedisWrapper() || {
+export const kv = createRedisWrapper() ?? {
   get: async (key: string) => inMemoryStore.get(key),
-  set: async (key: string, value: any) => {
+  set: async (key: string, value: unknown) => {
     inMemoryStore.set(key, value);
     return 'OK';
   },
-  setex: async (key: string, seconds: number, value: any) => {
+  setex: async (key: string, seconds: number, value: unknown) => {
     inMemoryStore.set(key, value);
     // In-memory store doesn't support TTL, but we'll store it anyway
     return 'OK';

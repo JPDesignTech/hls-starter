@@ -125,7 +125,7 @@ export function Navigation() {
           {/* Logo */}
           <Link
             href="/"
-            onClick={() => handleNavClick('/')}
+            onClick={(e) => handleNavClick(e, '/')}
             className="flex items-center space-x-2 text-white hover:text-yellow-400 transition-colors"
           >
             <Zap className="h-6 w-6 text-yellow-400" />
@@ -267,9 +267,9 @@ export function Navigation() {
                       <Link
                         key={module.id}
                         href={module.href}
-                        onClick={() => {
+                        onClick={(e) => {
                           setToolsOpen(false);
-                          handleNavClick(module.href);
+                          handleNavClick(e, module.href);
                         }}
                         className="flex items-center gap-3 px-4 py-2 text-sm text-gray-300 hover:text-white transition-colors"
                       >
@@ -343,7 +343,7 @@ function MobileNavLink({ href, onClick, isActive, children }: NavLinkProps) {
   return (
     <Link
       href={linkHref}
-      onClick={() => onClick(href)}
+      onClick={(e) => onClick(e, href)}
       className={`
         block px-4 py-2 text-sm font-medium transition-colors
         ${isActive 

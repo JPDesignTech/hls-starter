@@ -2,6 +2,7 @@
 
 import * as React from 'react';
 import { useParams } from 'next/navigation';
+import type { FfprobeData, FfprobeStream } from 'fluent-ffmpeg';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
@@ -30,8 +31,8 @@ interface FileMetadata {
 }
 
 interface ProbeData {
-  format?: any;
-  streams?: any[];
+  format?: unknown;
+  streams?: FfprobeStream[];
 }
 
 export default function StreamsPage() {
@@ -44,7 +45,7 @@ export default function StreamsPage() {
   const [error, setError] = React.useState<string | null>(null);
 
   React.useEffect(() => {
-    loadData();
+    void loadData();
   }, [fileId]);
 
   const loadData = async () => {
@@ -145,12 +146,15 @@ export default function StreamsPage() {
       {/* Override purple background with orange/yellow theme */}
       <div className="fixed inset-0 bg-gradient-to-br from-gray-900 via-orange-900 to-yellow-900 animate-gradient -z-10" />
       <div className="fixed inset-0 bg-gradient-to-t from-black/50 via-transparent to-transparent pointer-events-none -z-10" />
-      
+
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12 relative z-0">
         {/* Header */}
         <div className="mb-8">
           <Link href={`/what-the-ffmpeg/${fileId}`}>
-            <Button variant="ghost" className="text-white hover:bg-white/20 mb-4">
+            <Button
+              variant="ghost"
+              className="text-white hover:bg-white/20 mb-4"
+            >
               <ArrowLeft className="mr-2 h-4 w-4" />
               Back to Dashboard
             </Button>
@@ -184,32 +188,52 @@ export default function StreamsPage() {
                   Stream Summary
                 </CardTitle>
                 <CardDescription className="text-gray-300">
-                  {probeData.streams.length} stream{probeData.streams.length !== 1 ? 's' : ''} found
+                  {probeData.streams.length} stream
+                  {probeData.streams.length !== 1 ? 's' : ''} found
                 </CardDescription>
               </CardHeader>
               <CardContent>
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                   <div className="text-center">
                     <p className="text-2xl font-bold text-orange-400">
-                      {probeData.streams.filter((s: any) => s.codec_type === 'video').length}
+                      {
+                        probeData.streams.filter(
+                          (s: FfprobeStream) => s.codec_type === 'video'
+                        ).length
+                      }
                     </p>
                     <p className="text-sm text-gray-400">Video</p>
                   </div>
                   <div className="text-center">
                     <p className="text-2xl font-bold text-blue-400">
-                      {probeData.streams.filter((s: any) => s.codec_type === 'audio').length}
+                      {
+                        probeData.streams.filter(
+                          (s: FfprobeStream) => s.codec_type === 'audio'
+                        ).length
+                      }
                     </p>
                     <p className="text-sm text-gray-400">Audio</p>
                   </div>
                   <div className="text-center">
                     <p className="text-2xl font-bold text-green-400">
-                      {probeData.streams.filter((s: any) => s.codec_type === 'subtitle').length}
+                      {
+                        probeData.streams.filter(
+                          (s: FfprobeStream) => s.codec_type === 'subtitle'
+                        ).length
+                      }
                     </p>
                     <p className="text-sm text-gray-400">Subtitle</p>
                   </div>
                   <div className="text-center">
                     <p className="text-2xl font-bold text-gray-400">
-                      {probeData.streams.filter((s: any) => !['video', 'audio', 'subtitle'].includes(s.codec_type)).length}
+                      {
+                        probeData.streams.filter(
+                          (s: FfprobeStream) =>
+                            !['video', 'audio', 'subtitle'].includes(
+                              s.codec_type ?? ''
+                            )
+                        ).length
+                      }
                     </p>
                     <p className="text-sm text-gray-400">Other</p>
                   </div>
@@ -218,18 +242,24 @@ export default function StreamsPage() {
             </Card>
 
             {/* Individual Streams */}
-            {probeData.streams.map((stream: any, index: number) => (
-              <Card key={index} className={`bg-gradient-to-br from-yellow-600/20 to-orange-600/20 backdrop-blur-lg border border-yellow-500/30 ${getStreamTypeColor(stream.codec_type || 'unknown')}`}>
+            {probeData.streams.map((stream: FfprobeStream, index: number) => (
+              <Card
+                key={index}
+                className={`bg-gradient-to-br from-yellow-600/20 to-orange-600/20 backdrop-blur-lg border border-yellow-500/30 ${getStreamTypeColor(stream.codec_type ?? 'unknown')}`}
+              >
                 <CardHeader>
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-3">
-                      {getStreamTypeIcon(stream.codec_type)}
+                      {getStreamTypeIcon(stream.codec_type ?? 'unknown')}
                       <div>
                         <CardTitle className="text-white text-xl">
-                          Stream #{stream.index} - {stream.codec_type?.toUpperCase() || 'UNKNOWN'}
+                          Stream #{stream.index} -{' '}
+                          {stream.codec_type?.toUpperCase() ?? 'UNKNOWN'}
                         </CardTitle>
                         <CardDescription className="text-gray-300">
-                          {stream.codec_long_name || stream.codec_name || 'Unknown codec'}
+                          {stream.codec_long_name ??
+                            stream.codec_name ??
+                            'Unknown codec'}
                         </CardDescription>
                       </div>
                     </div>
@@ -239,20 +269,34 @@ export default function StreamsPage() {
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                     {/* Codec Information */}
                     <div className="space-y-3">
-                      <h3 className="text-sm font-semibold text-gray-400 uppercase tracking-wide">Codec</h3>
+                      <h3 className="text-sm font-semibold text-gray-400 uppercase tracking-wide">
+                        Codec
+                      </h3>
                       <div className="space-y-2">
                         <div>
-                          <p className="text-xs text-gray-500 mb-1">Codec Name</p>
-                          <p className="text-white font-mono text-lg">{stream.codec_name || 'Unknown'}</p>
+                          <p className="text-xs text-gray-500 mb-1">
+                            Codec Name
+                          </p>
+                          <p className="text-white font-mono text-lg">
+                            {stream.codec_name ?? 'Unknown'}
+                          </p>
                         </div>
                         <div>
-                          <p className="text-xs text-gray-500 mb-1">Codec Long Name</p>
-                          <p className="text-white font-mono text-sm">{stream.codec_long_name || 'Unknown'}</p>
+                          <p className="text-xs text-gray-500 mb-1">
+                            Codec Long Name
+                          </p>
+                          <p className="text-white font-mono text-sm">
+                            {stream.codec_long_name ?? 'Unknown'}
+                          </p>
                         </div>
                         {stream.codec_tag_string && (
                           <div>
-                            <p className="text-xs text-gray-500 mb-1">Codec Tag</p>
-                            <p className="text-white font-mono">{stream.codec_tag_string}</p>
+                            <p className="text-xs text-gray-500 mb-1">
+                              Codec Tag
+                            </p>
+                            <p className="text-white font-mono">
+                              {stream.codec_tag_string}
+                            </p>
                           </div>
                         )}
                       </div>
@@ -261,11 +305,15 @@ export default function StreamsPage() {
                     {/* Video-specific properties */}
                     {stream.codec_type === 'video' && (
                       <div className="space-y-3">
-                        <h3 className="text-sm font-semibold text-gray-400 uppercase tracking-wide">Video Properties</h3>
+                        <h3 className="text-sm font-semibold text-gray-400 uppercase tracking-wide">
+                          Video Properties
+                        </h3>
                         <div className="space-y-2">
                           {stream.width && stream.height && (
                             <div>
-                              <p className="text-xs text-gray-500 mb-1">Resolution</p>
+                              <p className="text-xs text-gray-500 mb-1">
+                                Resolution
+                              </p>
                               <p className="text-white font-mono text-lg">
                                 {stream.width} × {stream.height}
                               </p>
@@ -273,26 +321,42 @@ export default function StreamsPage() {
                           )}
                           {stream.r_frame_rate && (
                             <div>
-                              <p className="text-xs text-gray-500 mb-1">Frame Rate</p>
-                              <p className="text-white font-mono">{stream.r_frame_rate}</p>
+                              <p className="text-xs text-gray-500 mb-1">
+                                Frame Rate
+                              </p>
+                              <p className="text-white font-mono">
+                                {stream.r_frame_rate}
+                              </p>
                             </div>
                           )}
                           {stream.pix_fmt && (
                             <div>
-                              <p className="text-xs text-gray-500 mb-1">Pixel Format</p>
-                              <p className="text-white font-mono">{stream.pix_fmt}</p>
+                              <p className="text-xs text-gray-500 mb-1">
+                                Pixel Format
+                              </p>
+                              <p className="text-white font-mono">
+                                {stream.pix_fmt}
+                              </p>
                             </div>
                           )}
                           {stream.display_aspect_ratio && (
                             <div>
-                              <p className="text-xs text-gray-500 mb-1">Aspect Ratio</p>
-                              <p className="text-white font-mono">{stream.display_aspect_ratio}</p>
+                              <p className="text-xs text-gray-500 mb-1">
+                                Aspect Ratio
+                              </p>
+                              <p className="text-white font-mono">
+                                {stream.display_aspect_ratio}
+                              </p>
                             </div>
                           )}
                           {stream.color_space && (
                             <div>
-                              <p className="text-xs text-gray-500 mb-1">Color Space</p>
-                              <p className="text-white font-mono">{stream.color_space}</p>
+                              <p className="text-xs text-gray-500 mb-1">
+                                Color Space
+                              </p>
+                              <p className="text-white font-mono">
+                                {stream.color_space}
+                              </p>
                             </div>
                           )}
                         </div>
@@ -302,30 +366,48 @@ export default function StreamsPage() {
                     {/* Audio-specific properties */}
                     {stream.codec_type === 'audio' && (
                       <div className="space-y-3">
-                        <h3 className="text-sm font-semibold text-gray-400 uppercase tracking-wide">Audio Properties</h3>
+                        <h3 className="text-sm font-semibold text-gray-400 uppercase tracking-wide">
+                          Audio Properties
+                        </h3>
                         <div className="space-y-2">
                           {stream.sample_rate && (
                             <div>
-                              <p className="text-xs text-gray-500 mb-1">Sample Rate</p>
-                              <p className="text-white font-mono text-lg">{stream.sample_rate} Hz</p>
+                              <p className="text-xs text-gray-500 mb-1">
+                                Sample Rate
+                              </p>
+                              <p className="text-white font-mono text-lg">
+                                {stream.sample_rate} Hz
+                              </p>
                             </div>
                           )}
                           {stream.channels && (
                             <div>
-                              <p className="text-xs text-gray-500 mb-1">Channels</p>
-                              <p className="text-white font-mono text-lg">{stream.channels}</p>
+                              <p className="text-xs text-gray-500 mb-1">
+                                Channels
+                              </p>
+                              <p className="text-white font-mono text-lg">
+                                {stream.channels}
+                              </p>
                             </div>
                           )}
                           {stream.channel_layout && (
                             <div>
-                              <p className="text-xs text-gray-500 mb-1">Channel Layout</p>
-                              <p className="text-white font-mono">{stream.channel_layout}</p>
+                              <p className="text-xs text-gray-500 mb-1">
+                                Channel Layout
+                              </p>
+                              <p className="text-white font-mono">
+                                {stream.channel_layout}
+                              </p>
                             </div>
                           )}
                           {stream.sample_fmt && (
                             <div>
-                              <p className="text-xs text-gray-500 mb-1">Sample Format</p>
-                              <p className="text-white font-mono">{stream.sample_fmt}</p>
+                              <p className="text-xs text-gray-500 mb-1">
+                                Sample Format
+                              </p>
+                              <p className="text-white font-mono">
+                                {stream.sample_fmt}
+                              </p>
                             </div>
                           )}
                         </div>
@@ -334,32 +416,48 @@ export default function StreamsPage() {
 
                     {/* Common properties */}
                     <div className="space-y-3">
-                      <h3 className="text-sm font-semibold text-gray-400 uppercase tracking-wide">Properties</h3>
+                      <h3 className="text-sm font-semibold text-gray-400 uppercase tracking-wide">
+                        Properties
+                      </h3>
                       <div className="space-y-2">
                         {stream.bit_rate && (
                           <div>
-                            <p className="text-xs text-gray-500 mb-1">Bitrate</p>
+                            <p className="text-xs text-gray-500 mb-1">
+                              Bitrate
+                            </p>
                             <p className="text-white font-mono">
-                              {(parseInt(stream.bit_rate) / 1000).toFixed(0)} kbps
+                              {(Number(stream.bit_rate) / 1000).toFixed(0)} kbps
                             </p>
                           </div>
                         )}
                         {stream.duration && (
                           <div>
-                            <p className="text-xs text-gray-500 mb-1">Duration</p>
-                            <p className="text-white font-mono">{formatDuration(parseFloat(stream.duration))}</p>
+                            <p className="text-xs text-gray-500 mb-1">
+                              Duration
+                            </p>
+                            <p className="text-white font-mono">
+                              {formatDuration(parseFloat(stream.duration))}
+                            </p>
                           </div>
                         )}
                         {stream.start_time && (
                           <div>
-                            <p className="text-xs text-gray-500 mb-1">Start Time</p>
-                            <p className="text-white font-mono">{parseFloat(stream.start_time).toFixed(3)}s</p>
+                            <p className="text-xs text-gray-500 mb-1">
+                              Start Time
+                            </p>
+                            <p className="text-white font-mono">
+                              {(stream.start_time as number).toFixed(3)}s
+                            </p>
                           </div>
                         )}
                         {stream.nb_frames && (
                           <div>
-                            <p className="text-xs text-gray-500 mb-1">Frame Count</p>
-                            <p className="text-white font-mono">{stream.nb_frames}</p>
+                            <p className="text-xs text-gray-500 mb-1">
+                              Frame Count
+                            </p>
+                            <p className="text-white font-mono">
+                              {stream.nb_frames}
+                            </p>
                           </div>
                         )}
                       </div>

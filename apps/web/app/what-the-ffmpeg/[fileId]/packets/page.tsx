@@ -14,6 +14,7 @@ import {
   BarChart3
 } from 'lucide-react';
 import Link from 'next/link';
+import type { FfprobeFormat } from 'fluent-ffmpeg';
 
 interface FileMetadata {
   fileId: string;
@@ -28,8 +29,8 @@ interface FileMetadata {
 }
 
 interface ProbeData {
-  format?: any;
-  streams?: any[];
+  format?: unknown;
+  streams?: unknown[];
 }
 
 export default function PacketsPage() {
@@ -42,7 +43,7 @@ export default function PacketsPage() {
   const [error, setError] = React.useState<string | null>(null);
 
   React.useEffect(() => {
-    loadData();
+    void loadData();
   }, [fileId]);
 
   const loadData = async () => {
@@ -169,10 +170,10 @@ export default function PacketsPage() {
             </CardHeader>
             <CardContent>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                {probeData.format?.nb_streams && (
+                {(probeData.format as FfprobeFormat)?.nb_streams && (
                   <div>
                     <p className="text-sm text-gray-400 mb-1">Number of Streams</p>
-                    <p className="text-white font-mono text-2xl">{probeData.format.nb_streams}</p>
+                    <p className="text-white font-mono text-2xl">{(probeData.format as FfprobeFormat).nb_streams}</p>
                   </div>
                 )}
                 {probeData.streams && (
@@ -181,11 +182,11 @@ export default function PacketsPage() {
                     <p className="text-white font-mono text-2xl">{probeData.streams.length}</p>
                   </div>
                 )}
-                {probeData.format?.bit_rate && (
+                {(probeData.format as FfprobeFormat)?.bit_rate && (
                   <div>
                     <p className="text-sm text-gray-400 mb-1">Bitrate</p>
                     <p className="text-white font-mono text-lg">
-                      {(parseInt(probeData.format.bit_rate) / 1000000).toFixed(2)} Mbps
+                      {(((probeData.format as FfprobeFormat).bit_rate! as number) / 1000000).toFixed(2)} Mbps
                     </p>
                   </div>
                 )}

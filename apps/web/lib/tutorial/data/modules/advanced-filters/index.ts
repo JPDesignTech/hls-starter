@@ -1,4 +1,4 @@
-import { Module } from '@/lib/tutorial/types';
+import { type Module } from '@/lib/tutorial/types';
 import { dynamicOverlayPlacement } from './dynamic-overlay-placement';
 import { speedRamping } from './speed-ramping';
 import { frameInterpolation } from './frame-interpolation';

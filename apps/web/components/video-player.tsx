@@ -51,7 +51,7 @@ export function VideoPlayer({
         // For regular video files, just set the source directly
         video.src = src;
         video.addEventListener('loadedmetadata', () => {
-          if (autoPlay) video.play();
+          if (autoPlay) void video.play();
         });
         return;
       }
@@ -61,9 +61,9 @@ export function VideoPlayer({
         // Native HLS support (Safari)
         video.src = src;
         video.addEventListener('loadedmetadata', () => {
-          if (autoPlay) video.play();
+          if (autoPlay) void video.play();
         });
-      } else if (Hls && Hls.isSupported()) {
+      } else if (Hls?.isSupported()) {
         // HLS.js for other browsers
         const hls = new Hls({
           debug: false,
@@ -76,7 +76,7 @@ export function VideoPlayer({
         hls.attachMedia(video);
         
         hls.on(Hls.Events.MANIFEST_PARSED, () => {
-          if (autoPlay) video.play();
+          if (autoPlay) void video.play();
           
           // Get available quality levels
           const uniqueQualities = new Set<string>();
@@ -108,7 +108,7 @@ export function VideoPlayer({
             setCurrentQuality('Auto');
           } else {
             const currentLevel = levels.find(l => l.index === hls.currentLevel);
-            setCurrentQuality(currentLevel?.quality || 'Auto');
+            setCurrentQuality(currentLevel?.quality ?? 'Auto');
           }
         });
 
@@ -211,7 +211,7 @@ export function VideoPlayer({
       if (isPlaying) {
         videoRef.current.pause();
       } else {
-        videoRef.current.play();
+        void videoRef.current.play();
       }
     }
   };
@@ -243,9 +243,9 @@ export function VideoPlayer({
   const toggleFullscreen = () => {
     if (videoRef.current) {
       if (document.fullscreenElement) {
-        document.exitFullscreen();
+        void document.exitFullscreen();
       } else {
-        videoRef.current.requestFullscreen();
+        void videoRef.current.requestFullscreen();
       }
     }
   };

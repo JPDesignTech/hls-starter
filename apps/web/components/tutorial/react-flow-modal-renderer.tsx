@@ -3,13 +3,14 @@
 import * as React from 'react';
 import ReactFlow, {
   Background,
-  Node,
-  Edge,
+  type Node,
+  type Edge,
   ConnectionMode,
   MarkerType,
   BackgroundVariant,
   Handle,
   Position,
+  type ReactFlowInstance,
 } from 'reactflow';
 import 'reactflow/dist/style.css';
 import { Copy, Check, AlertCircle } from 'lucide-react';
@@ -25,34 +26,66 @@ const nodeTypes = {
   input: ({ data }: { data: { label: string } }) => (
     <div className="px-4 py-2 bg-purple-600/30 border-2 border-purple-400 rounded-lg text-white text-sm font-medium relative">
       {data.label}
-      <Handle type="source" position={Position.Right} className="!bg-purple-400 !border-purple-300" />
+      <Handle
+        type="source"
+        position={Position.Right}
+        className="!bg-purple-400 !border-purple-300"
+      />
     </div>
   ),
   filter: ({ data }: { data: { label: string } }) => (
     <div className="px-4 py-2 bg-indigo-600/30 border-2 border-indigo-400 rounded-lg text-white text-sm font-medium relative">
-      <Handle type="target" position={Position.Left} className="!bg-indigo-400 !border-indigo-300" />
+      <Handle
+        type="target"
+        position={Position.Left}
+        className="!bg-indigo-400 !border-indigo-300"
+      />
       {data.label}
-      <Handle type="source" position={Position.Right} className="!bg-indigo-400 !border-indigo-300" />
+      <Handle
+        type="source"
+        position={Position.Right}
+        className="!bg-indigo-400 !border-indigo-300"
+      />
     </div>
   ),
   output: ({ data }: { data: { label: string } }) => (
     <div className="px-4 py-2 bg-green-600/30 border-2 border-green-400 rounded-lg text-white text-sm font-medium relative">
-      <Handle type="target" position={Position.Left} className="!bg-green-400 !border-green-300" />
+      <Handle
+        type="target"
+        position={Position.Left}
+        className="!bg-green-400 !border-green-300"
+      />
       {data.label}
     </div>
   ),
   process: ({ data }: { data: { label: string } }) => (
     <div className="px-4 py-2 bg-blue-600/30 border-2 border-blue-400 rounded-lg text-white text-sm font-medium relative">
-      <Handle type="target" position={Position.Left} className="!bg-blue-400 !border-blue-300" />
+      <Handle
+        type="target"
+        position={Position.Left}
+        className="!bg-blue-400 !border-blue-300"
+      />
       {data.label}
-      <Handle type="source" position={Position.Right} className="!bg-blue-400 !border-blue-300" />
+      <Handle
+        type="source"
+        position={Position.Right}
+        className="!bg-blue-400 !border-blue-300"
+      />
     </div>
   ),
   default: ({ data }: { data: { label: string } }) => (
     <div className="px-4 py-2 bg-indigo-600/30 border-2 border-indigo-400 rounded-lg text-white text-sm font-medium relative">
-      <Handle type="target" position={Position.Left} className="!bg-indigo-400 !border-indigo-300" />
+      <Handle
+        type="target"
+        position={Position.Left}
+        className="!bg-indigo-400 !border-indigo-300"
+      />
       {data.label}
-      <Handle type="source" position={Position.Right} className="!bg-indigo-400 !border-indigo-300" />
+      <Handle
+        type="source"
+        position={Position.Right}
+        className="!bg-indigo-400 !border-indigo-300"
+      />
     </div>
   ),
 };
@@ -64,7 +97,8 @@ export function ReactFlowModalRenderer({
   const [copied, setCopied] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
   const reactFlowWrapper = React.useRef<HTMLDivElement>(null);
-  const [reactFlowInstance, setReactFlowInstance] = React.useState<any>(null);
+  const [reactFlowInstance, setReactFlowInstance] =
+    React.useState<ReactFlowInstance | null>(null);
 
   // Validate nodes and edges
   React.useEffect(() => {
@@ -86,7 +120,7 @@ export function ReactFlowModalRenderer({
     setTimeout(() => setCopied(false), 2000);
   };
 
-  const onInit = (instance: any) => {
+  const onInit = (instance: ReactFlowInstance) => {
     setReactFlowInstance(instance);
     // Fit view to show all nodes
     setTimeout(() => {
@@ -107,8 +141,8 @@ export function ReactFlowModalRenderer({
   const processedNodes = React.useMemo(() => {
     return nodes.map((node) => ({
       ...node,
-      style: node.style || defaultNodeStyle,
-      type: node.type || 'default',
+      style: node.style ?? defaultNodeStyle,
+      type: node.type ?? 'default',
     }));
   }, [nodes]);
 
@@ -116,10 +150,10 @@ export function ReactFlowModalRenderer({
   const processedEdges = React.useMemo(() => {
     return edges.map((edge) => ({
       ...edge,
-      type: edge.type || 'default',
-      animated: edge.animated || false,
-      style: edge.style || { stroke: '#6366f1', strokeWidth: 2 },
-      markerEnd: edge.markerEnd || {
+      type: edge.type ?? 'default',
+      animated: edge.animated ?? false,
+      style: edge.style ?? { stroke: '#6366f1', strokeWidth: 2 },
+      markerEnd: edge.markerEnd ?? {
         type: MarkerType.ArrowClosed,
         color: '#6366f1',
       },

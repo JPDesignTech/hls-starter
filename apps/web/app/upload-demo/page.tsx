@@ -116,10 +116,14 @@ export default function UploadDemoPage() {
                 <p>To use direct upload to Google Cloud Storage:</p>
                 <ol className="list-decimal list-inside space-y-2 ml-4">
                   <li>Set up a Google Cloud Storage bucket</li>
-                  <li>Create a service account with Storage Admin permissions</li>
-                  <li>Add these environment variables to Vercel:
+                  <li>
+                    Create a service account with Storage Admin permissions
+                  </li>
+                  <li>
+                    Add these environment variables to Vercel:
                     <code className="block mt-2 p-2 bg-black/50 rounded text-sm">
-                      GCS_BUCKET_NAME=your-bucket-name<br />
+                      GCS_BUCKET_NAME=your-bucket-name
+                      <br />
                       GCP_PROJECT_ID=your-project-id
                     </code>
                   </li>
@@ -134,13 +138,14 @@ export default function UploadDemoPage() {
                   <li>Files are split into 2MB chunks</li>
                   <li>Each chunk is uploaded sequentially</li>
                   <li>Server reassembles chunks into the original file</li>
-                  <li>Works with Vercel's 4.5MB limit per request</li>
+                  <li>Works with Vercel&apos;s 4.5MB limit per request</li>
                 </ul>
               </>
             )}
             {selectedMethod === 'traditional' && (
               <p className="text-yellow-400">
-                ⚠️ Traditional upload will fail for files larger than 4.5MB on Vercel.
+                ⚠️ Traditional upload will fail for files larger than 4.5MB on
+                Vercel.
               </p>
             )}
           </CardContent>
