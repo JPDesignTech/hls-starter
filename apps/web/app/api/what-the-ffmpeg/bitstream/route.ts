@@ -1,8 +1,47 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { type NextRequest, NextResponse } from 'next/server';
 import { kv } from '@/lib/redis';
 import { createStorage } from '@/lib/gcs-config';
 import { parseNALUnits, extractParameterSets } from '@/lib/nal-parser';
 import crypto from 'crypto';
+import type { FfprobeStream } from '@/lib/types/ffmpeg';
+
+interface FileMetadata {
+  filename: string;
+  [key: string]: any;
+}
+
+interface ProbeData {
+  streams?: FfprobeStream[];
+  [key: string]: any;
+}
+
+interface BitstreamRequest {
+  url: string;
+  streamIndex: number;
+  format: string;
+  codec?: 'h264' | 'h265';
+  codecSpecific?: boolean;
+  byteRange?: {
+    start: number;
+    end?: number;
+  } | null;
+  maxSize?: number;
+}
+
+interface BitstreamResponse {
+  success?: boolean;
+  bitstream?: string | null;
+  error?: string;
+  metadata?: any;
+  cached?: boolean;
+  suggestedChunkSize?: number;
+  message?: string;
+  byteRange?: any;
+  format?: string;
+  codec?: string;
+  statistics?: any;
+  [key: string]: any;
+}
 
 // Helper to get file URL from fileId
 async function getFileUrl(fileId: string, filename: string): Promise<string> {
@@ -17,7 +56,7 @@ async function getFileUrl(fileId: string, filename: string): Promise<string> {
 }
 
 // Helper to hash options for cache key
-function hashOptions(options: any): string {
+function hashOptions(options: unknown): string {
   return crypto.createHash('md5').update(JSON.stringify(options)).digest('hex').substring(0, 8);
 }
 
@@ -39,7 +78,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const ffprobeServiceUrl = process.env.FFPROBE_SERVICE_URL || process.env.NEXT_PUBLIC_FFPROBE_SERVICE_URL;
+    const ffprobeServiceUrl = process.env.FFPROBE_SERVICE_URL ?? process.env.NEXT_PUBLIC_FFPROBE_SERVICE_URL;
     
     if (!ffprobeServiceUrl) {
       return NextResponse.json(
@@ -49,7 +88,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Get file metadata from Redis
-    const fileMetadata = await kv.get(`wtf:file:${fileId}`);
+    const fileMetadata = await kv.get(`wtf:file:${fileId}`) as FileMetadata | null;
     if (!fileMetadata) {
       return NextResponse.json(
         { error: 'File not found' },
@@ -57,7 +96,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const metadata = fileMetadata as any;
+    const metadata = fileMetadata;
     const targetUrl = await getFileUrl(fileId, metadata.filename);
 
     // Create cache key (include byteRange in hash if specified)
@@ -66,11 +105,11 @@ export async function POST(request: NextRequest) {
 
     // Check cache first (only if not requesting a specific range, as ranges are usually unique)
     if (!byteRange) {
-      const cached = await kv.get(cacheKey);
+      const cached = await kv.get(cacheKey) as BitstreamResponse | null;
       if (cached) {
         return NextResponse.json({
           success: true,
-          ...(cached as any),
+          ...cached,
           cached: true,
         });
       }
@@ -80,11 +119,11 @@ export async function POST(request: NextRequest) {
     let codec: 'h264' | 'h265' | undefined;
     try {
       const probeCacheKey = `wtf:probe:${fileId}:${hashOptions({ showStreams: true })}`;
-      const probeData = await kv.get(probeCacheKey);
-      if (probeData && (probeData as any).streams) {
-        const videoStream = (probeData as any).streams.find((s: any) => s.codec_type === 'video' && s.index === streamIndex);
+      const probeData = await kv.get(probeCacheKey) as ProbeData | null;
+      if (probeData?.streams) {
+        const videoStream = probeData.streams.find((s) => s.codec_type === 'video' && s.index === streamIndex);
         if (videoStream) {
-          const codecName = (videoStream.codec_name || '').toLowerCase();
+          const codecName = (videoStream.codec_name ?? '').toLowerCase();
           if (codecName === 'h264') {
             codec = 'h264';
           } else if (codecName === 'hevc' || codecName === 'h265') {
@@ -98,7 +137,7 @@ export async function POST(request: NextRequest) {
 
     // Call Cloud Run bitstream extraction service
     // For large files, request only metadata or a chunk if byteRange is specified
-    const requestBody: any = {
+    const requestBody: BitstreamRequest = {
       url: targetUrl,
       streamIndex,
       format: format === 'hex' ? 'hex' : 'base64',
@@ -129,19 +168,19 @@ export async function POST(request: NextRequest) {
     const result = await response.json();
     
     if (!result.success) {
-      throw new Error(result.error || 'Bitstream extraction failed');
+      throw new Error(result.error ?? 'Bitstream extraction failed');
     }
 
     const bitstreamHex = result.bitstream;
-    const detectedCodec = result.codec || codec;
-    const totalSize = result.size || 0;
-    const chunkSize = result.chunkSize || bitstreamHex.length / 2; // Divide by 2 for hex string
+    const detectedCodec = result.codec ?? codec;
+    const totalSize = result.size ?? 0;
+    const chunkSize = result.chunkSize ?? bitstreamHex.length / 2; // Divide by 2 for hex string
 
     // Parse NAL units if codec-specific parsing is requested and codec is supported
     // Only parse if we have the full bitstream or if specifically requested
     let nalUnits;
     let parameterSets;
-    let statistics = {
+    const statistics = {
       totalSize,
       chunkSize,
       nalUnitCount: 0,
@@ -174,7 +213,7 @@ export async function POST(request: NextRequest) {
     // For large files, only cache metadata, not the full bitstream
     const isLargeFile = bitstreamSizeBytes > MAX_CACHE_SIZE;
     
-    const responseData: any = {
+    const responseData: BitstreamResponse = {
       success: true,
       format: format,
       codec: detectedCodec,

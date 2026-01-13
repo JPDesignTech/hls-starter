@@ -8,8 +8,8 @@ import { CommandBuilder } from '@/components/ffmpeg/command-builder';
 export default function FFMPEGCommandBuilderPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const initialCommand = searchParams.get('command') || '';
-  const returnTo = searchParams.get('returnTo') || '/';
+  const initialCommand = searchParams.get('command') ?? '';
+  const returnTo = searchParams.get('returnTo') ?? '/';
 
   const handleBack = () => {
     router.push(returnTo);

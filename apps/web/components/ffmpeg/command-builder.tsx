@@ -2,7 +2,7 @@
 
 import * as React from 'react';
 import { Terminal, Wrench, Search } from 'lucide-react';
-import { operations, Operation } from '@/lib/ffmpeg-operations';
+import { operations, type Operation } from '@/lib/ffmpeg-operations';
 import { BuildMode } from './build-mode';
 import { AnalyzeMode } from './analyze-mode';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';

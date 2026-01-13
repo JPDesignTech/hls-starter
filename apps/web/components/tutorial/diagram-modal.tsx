@@ -4,7 +4,7 @@ import * as React from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { MermaidModalRenderer } from './mermaid-modal-renderer';
 import { ReactFlowModalRenderer } from './react-flow-modal-renderer';
-import { Node, Edge } from 'reactflow';
+import { type Node, type Edge } from 'reactflow';
 
 export interface DiagramModalProps {
   open: boolean;
@@ -41,7 +41,7 @@ export function DiagramModal({
         }}
       >
         <DialogHeader className="px-6 pt-6 pb-4 border-b border-indigo-600/20 shrink-0">
-          <DialogTitle className="text-white text-xl">{title || 'Diagram'}</DialogTitle>
+          <DialogTitle className="text-white text-xl">{title ?? 'Diagram'}</DialogTitle>
           {explanation && (
             <p className="text-white/70 text-sm mt-2">{explanation}</p>
           )}

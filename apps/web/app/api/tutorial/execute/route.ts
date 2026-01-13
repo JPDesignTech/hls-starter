@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { type NextRequest, NextResponse } from 'next/server';
 import { exec } from 'child_process';
 import { promises as fs } from 'fs';
 import path from 'path';
@@ -65,8 +65,7 @@ function parseCommand(command: string, sampleVideoPath: string): string[] {
   let inQuotes = false;
   let quoteChar = '';
 
-  for (let i = 0; i < processedCommand.length; i++) {
-    const char = processedCommand[i];
+  for (const char of processedCommand) {
     
     if ((char === '"' || char === "'") && !inQuotes) {
       inQuotes = true;
@@ -94,7 +93,7 @@ function parseCommand(command: string, sampleVideoPath: string): string[] {
 }
 
 export async function POST(request: NextRequest) {
-  let tempFiles: string[] = [];
+  const tempFiles: string[] = [];
   
   try {
     const body = await request.json();
@@ -118,13 +117,13 @@ export async function POST(request: NextRequest) {
     const validation = validateCommand(command, sampleVideoId);
     if (!validation.valid) {
       return NextResponse.json(
-        { error: validation.error || 'Invalid command' },
+        { error: validation.error ?? 'Invalid command' },
         { status: 400 }
       );
     }
 
     // Get sample video path
-    const sampleVideoPath = SAMPLE_VIDEOS[sampleVideoId] || SAMPLE_VIDEOS['default'];
+    const sampleVideoPath = SAMPLE_VIDEOS[sampleVideoId] || SAMPLE_VIDEOS.default;
     
     // Download sample video to temp directory
     const tempDir = process.env.VERCEL ? '/tmp' : path.join(process.cwd(), 'temp');
@@ -135,7 +134,7 @@ export async function POST(request: NextRequest) {
 
     // Check if sample video exists in public folder (for local dev)
     const publicVideoPath = path.join(process.cwd(), 'public', 'tutorial-samples', `${sampleVideoId}.mp4`);
-    let videoPath = inputVideoPath;
+    const videoPath = inputVideoPath;
 
     try {
       // Try to use public folder first (for local development)
@@ -160,8 +159,9 @@ export async function POST(request: NextRequest) {
     const commandParts = parseCommand(command, inputVideoPath);
     
     // Detect output format from command (check for audio-only flags or output extension)
-    const isAudioOnly = command.includes('-vn') || command.includes('-an');
-    const outputExtension = command.match(/output\.(\w+)/)?.[1] || 'mp4';
+    // eslint-disable-next-line @typescript-eslint/prefer-nullish-coalescing
+    const isAudioOnly = command.includes('-vn') ?? command.includes('-an');
+    const outputExtension = command.match(/output\.(\w+)/)?.[1] ?? 'mp4';
     
     // Generate output path with appropriate extension
     const outputFilePath = path.join(tempDir, `output_${Date.now()}.${outputExtension}`);
@@ -204,12 +204,12 @@ export async function POST(request: NextRequest) {
     try {
       const probeCmd = `ffprobe -v quiet -print_format json -show_streams "${inputVideoPath}"`;
       const { stdout: probeStdout } = await execAsync(probeCmd);
-      const probeData = JSON.parse(probeStdout);
-      const videoStream = probeData.streams?.find((s: any) => s.codec_type === 'video');
+      const probeData = JSON.parse(probeStdout) as { streams?: Array<{ codec_type?: string; width?: number; height?: number }> };
+      const videoStream = probeData.streams?.find((s) => s.codec_type === 'video');
       if (videoStream) {
         originalDimensions = {
-          width: videoStream.width || 1920,
-          height: videoStream.height || 1080,
+          width: videoStream.width ?? 1920,
+          height: videoStream.height ?? 1080,
         };
       } else if (isAudioOnly) {
         originalDimensions = { width: 0, height: 0 };
@@ -221,12 +221,12 @@ export async function POST(request: NextRequest) {
     try {
       const probeCmd = `ffprobe -v quiet -print_format json -show_streams "${outputFilePath}"`;
       const { stdout: probeStdout } = await execAsync(probeCmd);
-      const probeData = JSON.parse(probeStdout);
-      const videoStream = probeData.streams?.find((s: any) => s.codec_type === 'video');
+      const probeData = JSON.parse(probeStdout) as { streams?: Array<{ codec_type?: string; width?: number; height?: number }> };
+      const videoStream = probeData.streams?.find((s) => s.codec_type === 'video');
       if (videoStream) {
         processedDimensions = {
-          width: videoStream.width || 1920,
-          height: videoStream.height || 1080,
+          width: videoStream.width ?? 1920,
+          height: videoStream.height ?? 1080,
         };
       } else if (isAudioOnly) {
         processedDimensions = { width: 0, height: 0 };
@@ -291,7 +291,7 @@ export async function POST(request: NextRequest) {
     // Clean up temp files
     for (const file of tempFiles) {
       try {
-        await fs.unlink(file).catch(() => {});
+        await fs.unlink(file).catch(() => undefined);
       } catch (error) {
         console.error('Error cleaning up temp file:', file, error);
       }

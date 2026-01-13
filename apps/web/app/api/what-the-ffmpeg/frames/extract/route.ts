@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { type NextRequest, NextResponse } from 'next/server';
 import { kv } from '@/lib/redis';
 
 // Helper to get file URL from fileId
@@ -22,7 +22,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Get file metadata from Redis
-    const fileMetadata = await kv.get(`wtf:file:${fileId}`);
+    const fileMetadata = await kv.get(`wtf:file:${fileId}`) as { filename: string } | null;
     if (!fileMetadata) {
       return NextResponse.json(
         { error: 'File not found' },
@@ -30,8 +30,8 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const fileUrl = await getFileUrl(fileId, (fileMetadata as any).filename);
-    const ffprobeServiceUrl = process.env.FFPROBE_SERVICE_URL || process.env.NEXT_PUBLIC_FFPROBE_SERVICE_URL;
+    const fileUrl = await getFileUrl(fileId, fileMetadata.filename);
+    const ffprobeServiceUrl = process.env.FFPROBE_SERVICE_URL ?? process.env.NEXT_PUBLIC_FFPROBE_SERVICE_URL;
     
     if (!ffprobeServiceUrl) {
       return NextResponse.json(
@@ -72,7 +72,7 @@ export async function POST(request: NextRequest) {
         success: false,
         frameUrl: null,
         placeholder: true,
-        error: result.error || 'Frame extraction failed',
+        error: result.error ?? 'Frame extraction failed',
         message: 'Frame extraction failed. Using placeholder.',
       });
     }
@@ -80,8 +80,8 @@ export async function POST(request: NextRequest) {
     // Return the frame URL (data URL from Cloud Run service)
     return NextResponse.json({
       success: true,
-      frameUrl: result.frameUrl || result.dataUrl,
-      cached: result.cached || false,
+      frameUrl: result.frameUrl ?? result.dataUrl,
+      cached: result.cached ?? false,
       timestamp: result.timestamp,
       frameNumber: result.frameNumber,
       size: result.size,

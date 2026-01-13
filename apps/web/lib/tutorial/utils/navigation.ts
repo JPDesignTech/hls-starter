@@ -2,7 +2,7 @@
  * Navigation utilities for tutorial lessons
  */
 
-import { Lesson } from '../types';
+import { type Lesson } from '../types';
 import { lessons } from '../data';
 import { isLessonUnlocked } from '../../tutorial-progress';
 

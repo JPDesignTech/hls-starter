@@ -2,7 +2,7 @@
 
 import * as React from 'react';
 import { Copy, Terminal, Info, Lightbulb, Check, Settings, ExternalLink } from 'lucide-react';
-import { Operation } from '@/lib/ffmpeg-operations';
+import { type Operation } from '@/lib/ffmpeg-operations';
 import { generateCommand } from '@/lib/ffmpeg-utils';
 import { getFlagExplanation } from '@/lib/ffmpeg-explanations';
 import { Button } from '@/components/ui/button';
@@ -64,7 +64,7 @@ export function BuildMode({ operations, selectedOperation, onOperationSelect }: 
         const flagExplanation = getFlagExplanation('-i');
         breakdown.push({
           part: '-i',
-          explanation: flagExplanation?.description || 'Specifies the input file',
+          explanation: flagExplanation?.description ?? 'Specifies the input file',
           flagExplanation,
         });
         if (parts[i + 1]) {
@@ -77,7 +77,7 @@ export function BuildMode({ operations, selectedOperation, onOperationSelect }: 
       } else if (part.startsWith('-')) {
         const flag = part;
         const flagExplanation = getFlagExplanation(flag);
-        const explanation = flagExplanation?.description || 'FFMPEG option flag';
+        const explanation = flagExplanation?.description ?? 'FFMPEG option flag';
         
         breakdown.push({ 
           part: flag, 
@@ -173,7 +173,7 @@ export function BuildMode({ operations, selectedOperation, onOperationSelect }: 
                     {param.type === 'select' ? (
                       <select
                         id={param.id}
-                        value={params[param.id] || param.defaultValue || ''}
+                        value={params[param.id] || (param.defaultValue ?? '')}
                         onChange={(e) => handleParamChange(param.id, e.target.value)}
                         className="w-full bg-white/10 border border-white/20 rounded-lg px-4 py-3 text-white focus:outline-none focus:border-teal-400/50 focus:ring-2 focus:ring-teal-400/20"
                       >
@@ -187,7 +187,7 @@ export function BuildMode({ operations, selectedOperation, onOperationSelect }: 
                       <Input
                         id={param.id}
                         type="number"
-                        value={params[param.id] || param.defaultValue || ''}
+                        value={params[param.id] || (param.defaultValue ?? '')}
                         onChange={(e) => handleParamChange(param.id, e.target.value)}
                         min={param.min}
                         max={param.max}
@@ -197,7 +197,7 @@ export function BuildMode({ operations, selectedOperation, onOperationSelect }: 
                       <Input
                         id={param.id}
                         type="text"
-                        value={params[param.id] || param.defaultValue || ''}
+                        value={params[param.id] || (param.defaultValue ?? '')}
                         onChange={(e) => handleParamChange(param.id, e.target.value)}
                         placeholder={param.placeholder}
                         className="bg-white/10 border-white/20 text-white placeholder:text-gray-400"

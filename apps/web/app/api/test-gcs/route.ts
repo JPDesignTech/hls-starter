@@ -13,7 +13,7 @@ export async function GET() {
     );
     
     const [buckets] = await storage.getBuckets();
-    const bucket = storage.bucket(process.env.GCS_BUCKET_NAME || '');
+    const bucket = storage.bucket(process.env.GCS_BUCKET_NAME ?? '');
     const [exists] = await bucket.exists();
     
     return NextResponse.json({

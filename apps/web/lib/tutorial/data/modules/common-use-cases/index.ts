@@ -1,4 +1,4 @@
-import { Module } from '@/lib/tutorial/types';
+import { type Module } from '@/lib/tutorial/types';
 import { convertingMp4ToMp3 } from './converting-mp4-to-mp3';
 import { creatingVideoThumbnails } from './creating-video-thumbnails';
 import { addingSubtitlesToVideos } from './adding-subtitles-to-videos';

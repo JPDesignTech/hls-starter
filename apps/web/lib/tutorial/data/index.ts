@@ -3,7 +3,7 @@
  * Aggregates all modules and provides a flat lessons array
  */
 
-import { Lesson } from '../types';
+import { type Lesson } from '../types';
 import { fundamentalsModule } from './modules/fundamentals';
 import { videoProcessingModule } from './modules/video-processing';
 import { audioProcessingModule } from './modules/audio-processing';

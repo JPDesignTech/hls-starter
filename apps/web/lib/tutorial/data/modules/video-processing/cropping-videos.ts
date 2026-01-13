@@ -1,4 +1,4 @@
-import { Lesson } from '@/lib/tutorial/types';
+import { type Lesson } from '@/lib/tutorial/types';
 
 export const croppingVideos: Lesson = {
   id: 'cropping-videos',

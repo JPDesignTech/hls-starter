@@ -3,7 +3,7 @@
  * Handles calculation of quiz scores and validation
  */
 
-import { ModuleQuizQuestion, QuestionScore, QuizScore } from '../types/module-quiz';
+import { type ModuleQuizQuestion, type QuestionScore, type QuizScore } from '../types/module-quiz';
 
 export interface QuestionResult {
   questionId: string;

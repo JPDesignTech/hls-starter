@@ -81,7 +81,7 @@ export default function WhatTheFFMPEGPage() {
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
-        throw new Error(errorData.error || `Failed to get upload URL (${response.status})`);
+        throw new Error(errorData.error ?? `Failed to get upload URL (${response.status})`);
       }
 
       const { uploadUrl, videoId: serverVideoId, filename } = await response.json();
@@ -112,7 +112,8 @@ export default function WhatTheFFMPEGPage() {
         }
       });
 
-      xhr.addEventListener('load', async () => {
+      xhr.addEventListener('load', () => {
+        void (async () => {
         if (xhr.status === 200) {
           // Step 3: Notify backend that upload is complete (existing endpoint)
           await fetch('/api/upload/complete', {
@@ -160,6 +161,7 @@ export default function WhatTheFFMPEGPage() {
         } else {
           throw new Error('Upload failed');
         }
+        })();
       });
 
       xhr.addEventListener('error', () => {
@@ -323,7 +325,7 @@ export default function WhatTheFFMPEGPage() {
               <div className="p-2 bg-yellow-500/20 rounded-lg">
                 <BarChart3 className="h-5 w-5 text-yellow-400" />
               </div>
-              What You'll Get
+              What You&apos;ll Get
             </CardTitle>
           </CardHeader>
           <CardContent>

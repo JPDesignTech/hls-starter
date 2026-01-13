@@ -1,10 +1,44 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { type NextRequest, NextResponse } from 'next/server';
 import { kv } from '@/lib/redis';
 import { createStorage } from '@/lib/gcs-config';
 import crypto from 'crypto';
+import type { FfprobeData, FfprobeFrame } from '@/lib/types/ffmpeg';
+
+interface ProbeOptions {
+  showFrames?: boolean;
+  showPackets?: boolean;
+  page?: number;
+  pageSize?: number;
+  [key: string]: any;
+}
+
+interface FileMetadata {
+  filename: string;
+  [key: string]: any;
+}
+
+interface ProbeResponse {
+  frames?: FfprobeFrame[];
+  packets?: any[];
+  pagination?: {
+    frames?: {
+      page: number;
+      pageSize: number;
+      total: number;
+      totalPages: number;
+    };
+    packets?: {
+      page: number;
+      pageSize: number;
+      total: number;
+      totalPages: number;
+    };
+  };
+  [key: string]: any;
+}
 
 // Helper to hash options for cache key
-function hashOptions(options: any): string {
+function hashOptions(options: unknown): string {
   return crypto.createHash('md5').update(JSON.stringify(options)).digest('hex').substring(0, 8);
 }
 
@@ -31,7 +65,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const ffprobeServiceUrl = process.env.FFPROBE_SERVICE_URL || process.env.NEXT_PUBLIC_FFPROBE_SERVICE_URL;
+    const ffprobeServiceUrl = process.env.FFPROBE_SERVICE_URL ?? process.env.NEXT_PUBLIC_FFPROBE_SERVICE_URL;
     
     if (!ffprobeServiceUrl) {
       return NextResponse.json(
@@ -44,32 +78,32 @@ export async function POST(request: NextRequest) {
     let targetUrl = fileUrl;
     if (!targetUrl && fileId) {
       // Get file metadata from Redis
-      const fileMetadata = await kv.get(`wtf:file:${fileId}`);
+      const fileMetadata = await kv.get(`wtf:file:${fileId}`) as FileMetadata | null;
       if (!fileMetadata) {
         return NextResponse.json(
           { error: 'File not found' },
           { status: 404 }
         );
       }
-      targetUrl = await getFileUrl(fileId, (fileMetadata as any).filename);
+      targetUrl = await getFileUrl(fileId, fileMetadata.filename);
     }
 
     // Extract pagination parameters
-    const page = options.page || 0;
-    const pageSize = options.pageSize || 100;
-    const needsPagination = (options.showFrames || options.showPackets) && (page !== undefined || pageSize !== undefined);
+    const page = options.page ?? 0;
+    const pageSize = options.pageSize ?? 100;
+    const needsPagination = (options.showFrames ?? options.showPackets) && (page !== undefined ?? pageSize !== undefined);
 
     // Create cache key (without pagination params for full data cache)
     const cacheOptions = { ...options };
     delete cacheOptions.page;
     delete cacheOptions.pageSize;
     const optionsHash = hashOptions(cacheOptions);
-    const cacheKey = `wtf:probe:${fileId || hashOptions(targetUrl)}:${optionsHash}`;
+    const cacheKey = `wtf:probe:${fileId ?? hashOptions(targetUrl)}:${optionsHash}`;
 
     // Check cache first
-    const cached = await kv.get(cacheKey);
+    const cached = await kv.get(cacheKey) as ProbeResponse | null;
     if (cached) {
-      let responseData = cached;
+      let responseData: ProbeResponse = cached;
       
       // Apply pagination if needed
       if (needsPagination && cached) {
@@ -120,7 +154,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Map options to FFProbe service format
-    const detailed = options.showFrames || options.showPackets || false;
+    const detailed = options.showFrames ?? options.showPackets ?? false;
 
     // Call Cloud Run FFProbe service (reusing existing pattern)
     const response = await fetch(`${ffprobeServiceUrl}/probe`, {
@@ -129,8 +163,8 @@ export async function POST(request: NextRequest) {
       body: JSON.stringify({
         url: targetUrl,
         detailed,
-        showFrames: options.showFrames || false,
-        showPackets: options.showPackets || false,
+        showFrames: options.showFrames ?? false,
+        showPackets: options.showPackets ?? false,
       }),
       signal: AbortSignal.timeout(60000), // 60 second timeout
     });
@@ -142,7 +176,7 @@ export async function POST(request: NextRequest) {
     const result = await response.json();
     
     if (!result.success) {
-      throw new Error(result.error || 'FFprobe service failed');
+      throw new Error(result.error ?? 'FFprobe service failed');
     }
 
     const probeData = result.data;

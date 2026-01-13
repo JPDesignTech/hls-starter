@@ -17,14 +17,15 @@ export default function ModuleQuizPage() {
   const router = useRouter();
   const moduleId = params.moduleId as string;
   
-  const [module, setModule] = React.useState<ReturnType<typeof getModuleById>>(null);
+  const [module, setModule] =
+    React.useState<ReturnType<typeof getModuleById>>(undefined);
   const [isLoading, setIsLoading] = React.useState(true);
   const [isLocked, setIsLocked] = React.useState(false);
   const [sidebarOpen, setSidebarOpen] = React.useState(false);
 
   React.useEffect(() => {
     const foundModule = getModuleById(moduleId);
-    setModule(foundModule || null);
+    setModule(foundModule);
 
     if (foundModule) {
       // Check if all lessons are completed
@@ -52,11 +53,13 @@ export default function ModuleQuizPage() {
       <div className="min-h-screen bg-gradient-to-br from-purple-900 via-purple-800 to-purple-900 flex items-center justify-center">
         <Card className="bg-purple-950/30 border border-purple-700/30 rounded-xl p-6 max-w-md">
           <CardHeader>
-            <CardTitle className="text-white text-xl mb-2">Module Not Found</CardTitle>
+            <CardTitle className="text-white text-xl mb-2">
+              Module Not Found
+            </CardTitle>
           </CardHeader>
           <CardContent>
             <p className="text-gray-300 mb-4">
-              The module you're looking for doesn't exist.
+              The module you&apos;re looking for doesn&apos;t exist.
             </p>
             <Button
               onClick={() => router.push('/learn')}
@@ -75,11 +78,13 @@ export default function ModuleQuizPage() {
       <div className="min-h-screen bg-gradient-to-br from-purple-900 via-purple-800 to-purple-900 flex items-center justify-center">
         <Card className="bg-purple-950/30 border border-purple-700/30 rounded-xl p-6 max-w-md">
           <CardHeader>
-            <CardTitle className="text-white text-xl mb-2">Quiz Not Available</CardTitle>
+            <CardTitle className="text-white text-xl mb-2">
+              Quiz Not Available
+            </CardTitle>
           </CardHeader>
           <CardContent>
             <p className="text-gray-300 mb-4">
-              This module doesn't have a quiz yet.
+              This module doesn&apos;t have a quiz yet.
             </p>
             <Button
               onClick={() => router.push('/learn')}

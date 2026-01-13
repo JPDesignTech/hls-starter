@@ -1,4 +1,4 @@
-import { Module } from '@/lib/tutorial/types';
+import { type Module } from '@/lib/tutorial/types';
 import { audioCodecs } from './audio-codecs';
 import { extractingAudioFromVideo } from './extracting-audio-from-video';
 import { convertingAudioFormats } from './converting-audio-formats';

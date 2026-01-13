@@ -1,4 +1,4 @@
-import { Module } from '@/lib/tutorial/types';
+import { type Module } from '@/lib/tutorial/types';
 import { introductionToFFprobe } from './introduction-to-ffprobe';
 import { basicMetadataExtraction } from './basic-metadata-extraction';
 import { extractingFormatInformation } from './extracting-format-information';

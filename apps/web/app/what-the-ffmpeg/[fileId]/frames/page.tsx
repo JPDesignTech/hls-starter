@@ -2,6 +2,8 @@
 
 import * as React from 'react';
 import { useParams } from 'next/navigation';
+import type { FfprobeFrame } from '@/lib/types/ffmpeg';
+import type { FfprobeStream } from 'fluent-ffmpeg';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
@@ -28,8 +30,8 @@ interface FileMetadata {
 }
 
 interface ProbeData {
-  format?: any;
-  streams?: any[];
+  format?: unknown;
+  streams?: FfprobeStream[];
 }
 
 export default function FramesPage() {
@@ -42,7 +44,7 @@ export default function FramesPage() {
   const [error, setError] = React.useState<string | null>(null);
 
   React.useEffect(() => {
-    loadData();
+    void loadData();
   }, [fileId]);
 
   const loadData = async () => {
@@ -96,8 +98,8 @@ export default function FramesPage() {
   }
 
   // Get frame count from streams if available
-  const videoStream = probeData?.streams?.find((s: any) => s.codec_type === 'video');
-  const frameCount = videoStream?.nb_frames;
+  const videoStream = probeData?.streams?.find((s: FfprobeStream) => s.codec_type === 'video');
+  const frameCount = (videoStream as FfprobeStream | undefined)?.nb_frames as number | undefined;
 
   return (
     <div className="min-h-screen relative">
@@ -128,7 +130,7 @@ export default function FramesPage() {
           <Alert className="bg-red-500/20 border-red-500/50 mb-6">
             <AlertCircle className="h-4 w-4" />
             <AlertTitle>Error</AlertTitle>
-            <AlertDescription>{error}</AlertDescription>
+            <AlertDescription>{error as React.ReactNode}</AlertDescription>
           </Alert>
         )}
 
@@ -179,17 +181,17 @@ export default function FramesPage() {
                     <p className="text-white font-mono text-2xl">{frameCount}</p>
                   </div>
                 )}
-                {videoStream.r_frame_rate && (
+                {(videoStream as FfprobeStream | undefined)?.r_frame_rate && (
                   <div>
                     <p className="text-sm text-gray-400 mb-1">Frame Rate</p>
-                    <p className="text-white font-mono text-2xl">{videoStream.r_frame_rate}</p>
+                    <p className="text-white font-mono text-2xl">{(videoStream as FfprobeStream).r_frame_rate}</p>
                   </div>
                 )}
-                {videoStream.width && videoStream.height && (
+                {(videoStream as FfprobeStream | undefined)?.width && (videoStream as FfprobeStream | undefined)?.height && (
                   <div>
                     <p className="text-sm text-gray-400 mb-1">Resolution</p>
                     <p className="text-white font-mono text-lg">
-                      {videoStream.width} × {videoStream.height}
+                      {(videoStream as FfprobeStream).width} × {(videoStream as FfprobeStream).height}
                     </p>
                   </div>
                 )}

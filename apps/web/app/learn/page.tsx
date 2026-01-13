@@ -25,8 +25,8 @@ export default function LearnPage() {
         setCurrentLesson(lessonParam);
       } else {
         // Invalid or locked lesson, redirect to first available
-        setCurrentLessonId(lessons[0]?.id || null);
-        router.replace('/learn?lesson=' + (lessons[0]?.id || ''));
+        setCurrentLessonId(lessons[0]?.id ?? null);
+        router.replace('/learn?lesson=' + (lessons[0]?.id ?? ''));
       }
     } else {
       // No lesson specified, go to first lesson
@@ -90,7 +90,7 @@ export default function LearnPage() {
               sidebarOpen ? 'translate-x-0' : '-translate-x-full'
             } lg:translate-x-0 fixed lg:static inset-y-0 left-0 z-40 w-64 lg:w-auto transition-transform duration-300 ease-in-out`}
           >
-            <TutorialSidebar currentLessonId={currentLessonId || undefined} />
+            <TutorialSidebar currentLessonId={currentLessonId ?? undefined} />
           </div>
 
           {/* Overlay for mobile */}

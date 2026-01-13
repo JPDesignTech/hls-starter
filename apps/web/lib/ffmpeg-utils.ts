@@ -1,5 +1,5 @@
-import { Operation, Parameter } from './ffmpeg-operations';
-import { getFlagExplanation, FlagExplanation, FlagCategory } from './ffmpeg-explanations';
+import { type Operation, Parameter } from './ffmpeg-operations';
+import { getFlagExplanation, type FlagExplanation, type FlagCategory } from './ffmpeg-explanations';
 
 export interface ParsedCommand {
   binary: string;
@@ -29,10 +29,10 @@ export function generateCommand(operation: Operation, params: Record<string, str
 
   switch (operation.id) {
     case 'convert': {
-      const inputExt = params.inputFormat || operation.params[0].defaultValue || 'mp4';
-      const outputExt = params.outputFormat || operation.params[1].defaultValue || 'webm';
-      const videoCodec = params.videoCodec || operation.params[2].defaultValue || 'libx264';
-      const audioCodec = params.audioCodec || operation.params[3].defaultValue || 'aac';
+      const inputExt = params.inputFormat || (operation.params[0].defaultValue ?? 'mp4');
+      const outputExt = params.outputFormat || (operation.params[1].defaultValue ?? 'webm');
+      const videoCodec = params.videoCodec || (operation.params[2].defaultValue ?? 'libx264');
+      const audioCodec = params.audioCodec || (operation.params[3].defaultValue ?? 'aac');
 
       command = `ffmpeg -i input.${inputExt}`;
       if (videoCodec !== 'copy') {
@@ -50,9 +50,9 @@ export function generateCommand(operation: Operation, params: Record<string, str
     }
 
     case 'resize': {
-      const width = params.width || operation.params[0].defaultValue || '1280';
-      const height = params.height || operation.params[1].defaultValue || '720';
-      const maintainAspect = params.aspectRatio || operation.params[2].defaultValue || 'yes';
+      const width = params.width || (operation.params[0].defaultValue ?? '1280');
+      const height = params.height || (operation.params[1].defaultValue ?? '720');
+      const maintainAspect = params.aspectRatio || (operation.params[2].defaultValue ?? 'yes');
 
       if (maintainAspect === 'yes') {
         command = `ffmpeg -i input.mp4 -vf scale=${width}:${height} output.mp4`;
@@ -63,9 +63,9 @@ export function generateCommand(operation: Operation, params: Record<string, str
     }
 
     case 'compress': {
-      const crf = params.crf || operation.params[0].defaultValue || '23';
-      const preset = params.preset || operation.params[1].defaultValue || 'medium';
-      const maxBitrate = params.maxBitrate || '';
+      const crf = params.crf || (operation.params[0].defaultValue ?? '23');
+      const preset = params.preset || (operation.params[1].defaultValue ?? 'medium');
+      const maxBitrate = params.maxBitrate ?? '';
 
       command = `ffmpeg -i input.mp4 -c:v libx264 -crf ${crf} -preset ${preset}`;
       if (maxBitrate) {
@@ -76,9 +76,9 @@ export function generateCommand(operation: Operation, params: Record<string, str
     }
 
     case 'extract': {
-      const audioFormat = params.audioFormat || operation.params[0].defaultValue || 'mp3';
-      const bitrate = params.bitrate || operation.params[1].defaultValue || '192k';
-      const sampleRate = params.sampleRate || '';
+      const audioFormat = params.audioFormat || (operation.params[0].defaultValue ?? 'mp3');
+      const bitrate = params.bitrate || (operation.params[1].defaultValue ?? '192k');
+      const sampleRate = params.sampleRate ?? '';
 
       command = `ffmpeg -i input.mp4 -vn`;
       
@@ -99,17 +99,17 @@ export function generateCommand(operation: Operation, params: Record<string, str
     }
 
     case 'trim': {
-      const startTime = params.startTime || operation.params[0].defaultValue || '00:00:00';
-      const duration = params.duration || operation.params[1].defaultValue || '00:00:10';
+      const startTime = params.startTime || (operation.params[0].defaultValue ?? '00:00:00');
+      const duration = params.duration || (operation.params[1].defaultValue ?? '00:00:10');
 
       command = `ffmpeg -i input.mp4 -ss ${startTime} -t ${duration} output.mp4`;
       break;
     }
 
     case 'watermark': {
-      const position = params.position || operation.params[0].defaultValue || 'bottom-right';
-      const opacity = params.opacity || operation.params[1].defaultValue || '0.5';
-      const scale = params.scale || operation.params[2].defaultValue || '0.1';
+      const position = params.position || (operation.params[0].defaultValue ?? 'bottom-right');
+      const opacity = params.opacity || (operation.params[1].defaultValue ?? '0.5');
+      const scale = params.scale || (operation.params[2].defaultValue ?? '0.1');
 
       // Position mapping
       const positionMap: Record<string, string> = {
@@ -126,9 +126,9 @@ export function generateCommand(operation: Operation, params: Record<string, str
     }
 
     case 'extractFrames': {
-      const fps = params.fps || operation.params[0].defaultValue || '1';
-      const outputFormat = params.outputFormat || operation.params[1].defaultValue || 'png';
-      const startTime = params.startTime || '';
+      const fps = params.fps || (operation.params[0].defaultValue ?? '1');
+      const outputFormat = params.outputFormat || (operation.params[1].defaultValue ?? 'png');
+      const startTime = params.startTime ?? '';
 
       command = `ffmpeg`;
       if (startTime) {
@@ -139,7 +139,7 @@ export function generateCommand(operation: Operation, params: Record<string, str
     }
 
     case 'speed': {
-      const speedFactor = params.speedFactor || operation.params[0].defaultValue || '1.0';
+      const speedFactor = params.speedFactor || (operation.params[0].defaultValue ?? '1.0');
       const speed = parseFloat(speedFactor);
       const ptsValue = (1 / speed).toFixed(2);
 
@@ -148,16 +148,16 @@ export function generateCommand(operation: Operation, params: Record<string, str
     }
 
     case 'thumbnail': {
-      const timestamp = params.timestamp || operation.params[0].defaultValue || '00:00:01';
-      const width = params.width || operation.params[1].defaultValue || '320';
-      const height = params.height || operation.params[2].defaultValue || '180';
+      const timestamp = params.timestamp || (operation.params[0].defaultValue ?? '00:00:01');
+      const width = params.width || (operation.params[1].defaultValue ?? '320');
+      const height = params.height || (operation.params[2].defaultValue ?? '180');
 
       command = `ffmpeg -i input.mp4 -ss ${timestamp} -vframes 1 -s ${width}x${height} output.jpg`;
       break;
     }
 
     case 'merge': {
-      const method = params.method || operation.params[0].defaultValue || 'concat';
+      const method = params.method || (operation.params[0].defaultValue ?? 'concat');
       
       if (method === 'concat') {
         command = `ffmpeg -f concat -safe 0 -i filelist.txt -c copy output.mp4`;
@@ -197,8 +197,7 @@ export function parseCommand(commandString: string): ParsedCommand {
   let currentToken = '';
   let inQuotes = false;
 
-  for (let i = 0; i < trimmed.length; i++) {
-    const char = trimmed[i];
+  for (const char of trimmed) {
     
     if (char === '"' || char === "'") {
       inQuotes = !inQuotes;
@@ -239,7 +238,7 @@ export function parseCommand(commandString: string): ParsedCommand {
   };
 
   let i = 1;
-  let currentInput: { flags: string[]; file: string } | null = null;
+  const currentInput: { flags: string[]; file: string } | null = null;
   let expectingValue = false;
   let lastFlag = '';
 
@@ -274,7 +273,7 @@ export function parseCommand(commandString: string): ParsedCommand {
 
       // Categorize flag
       const explanation = getFlagExplanation(token);
-      const category = explanation?.category || 'global';
+      const category = explanation?.category ?? 'global';
 
       if (token.startsWith('-vf') || token.startsWith('-filter:v')) {
         i++;
@@ -441,7 +440,7 @@ export function parseFilter(filterString: string): Array<{ name: string; params:
   const filterParts = cleaned.split(',').map(f => f.trim());
   
   for (const part of filterParts) {
-    const match = part.match(/^(\w+)(?:=(.+))?$/);
+    const match = /^(\w+)(?:=(.+))?$/.exec(part);
     if (match) {
       const [, name, paramsStr] = match;
       const params: Record<string, string> = {};

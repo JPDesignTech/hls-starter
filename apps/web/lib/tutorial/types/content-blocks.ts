@@ -3,7 +3,7 @@
  * Each block represents a different type of content that can appear in a lesson
  */
 
-import * as React from 'react';
+import type * as React from 'react';
 
 export interface TextBlock {
   type: 'text';

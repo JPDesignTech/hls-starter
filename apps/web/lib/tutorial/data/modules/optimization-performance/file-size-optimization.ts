@@ -1,4 +1,4 @@
-import { Lesson } from '@/lib/tutorial/types';
+import { type Lesson } from '@/lib/tutorial/types';
 
 export const fileSizeOptimization: Lesson = {
   id: 'file-size-optimization',

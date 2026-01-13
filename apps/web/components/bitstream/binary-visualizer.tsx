@@ -22,24 +22,14 @@ export function BinaryVisualizer({ hexData, nalUnits = [], onOffsetClick }: Bina
   const [bytesPerRow] = React.useState(32);
   const [visibleRange, setVisibleRange] = React.useState({ start: 0, end: 500 }); // Show first 500 rows
 
-  // Handle null/empty hexData
-  if (!hexData || hexData.length === 0) {
-    return (
-      <Card className="bg-white/15 border-white/20" style={{ isolation: 'isolate', contain: 'layout style paint' }}>
-        <CardContent className="p-6 text-center">
-          <p className="text-gray-300">No bitstream data available</p>
-        </CardContent>
-      </Card>
-    );
-  }
-
   // Calculate total bytes (don't convert all at once for large files)
-  const totalBytes = Math.floor(hexData.length / 2);
+  const totalBytes = Math.floor((hexData?.length ?? 0) / 2);
   const totalRows = Math.ceil(totalBytes / bytesPerRow);
   const isLargeFile = totalBytes > 1000000; // > 1MB
 
   // Convert hex to bytes on-demand (only for visible range)
   const getBytesForRange = React.useCallback((startByte: number, endByte: number): number[] => {
+    if (!hexData) return [];
     const result: number[] = [];
     const startHex = startByte * 2;
     const endHex = Math.min(endByte * 2, hexData.length);
@@ -142,6 +132,17 @@ export function BinaryVisualizer({ hexData, nalUnits = [], onOffsetClick }: Bina
     }
     return rows;
   }, [visibleRange, totalRows]);
+
+  // Handle null/empty hexData (check after all hooks)
+  if (!hexData || hexData.length === 0) {
+    return (
+      <Card className="bg-white/15 border-white/20" style={{ isolation: 'isolate', contain: 'layout style paint' }}>
+        <CardContent className="p-6 text-center">
+          <p className="text-gray-300">No bitstream data available</p>
+        </CardContent>
+      </Card>
+    );
+  }
 
   return (
     <Card className="bg-white/15 border-white/20" style={{ isolation: 'isolate', contain: 'layout style paint' }}>

@@ -1,4 +1,4 @@
-import { Lesson } from '@/lib/tutorial/types';
+import { type Lesson } from '@/lib/tutorial/types';
 
 export const convertingMp4ToMp3: Lesson = {
   id: 'converting-mp4-to-mp3',

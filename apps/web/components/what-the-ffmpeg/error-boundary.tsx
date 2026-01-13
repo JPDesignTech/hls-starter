@@ -67,7 +67,7 @@ export class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoun
             <AlertCircle className="h-4 w-4" />
             <AlertTitle>Something went wrong</AlertTitle>
             <AlertDescription className="mt-4">
-              <p className="mb-4">{this.state.error.message || 'An unexpected error occurred'}</p>
+              <p className="mb-4">{this.state.error.message ?? 'An unexpected error occurred'}</p>
               {process.env.NODE_ENV === 'development' && this.state.errorInfo && (
                 <details className="mt-4">
                   <summary className="cursor-pointer text-sm font-semibold mb-2">

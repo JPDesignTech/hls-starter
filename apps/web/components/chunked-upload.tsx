@@ -10,8 +10,8 @@ const CHUNK_SIZE = 2 * 1024 * 1024; // 2MB chunks
 
 interface ChunkedUploadProps {
   onUploadComplete?: (videoId: string, filename: string) => void;
-  onVideoAdded?: (video: any) => void;
-  onVideoUpdated?: (videoId: string, updates: any) => void;
+  onVideoAdded?: (video: unknown) => void;
+  onVideoUpdated?: (videoId: string, updates: unknown) => void;
 }
 
 export function ChunkedUpload({ onUploadComplete, onVideoAdded, onVideoUpdated }: ChunkedUploadProps) {
@@ -23,7 +23,7 @@ export function ChunkedUpload({ onUploadComplete, onVideoAdded, onVideoUpdated }
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const selectedFile = e.target.files?.[0];
-    if (selectedFile && selectedFile.type.startsWith('video/')) {
+    if (selectedFile?.type.startsWith('video/')) {
       setFile(selectedFile);
       setError(null);
     } else {
@@ -41,7 +41,7 @@ export function ChunkedUpload({ onUploadComplete, onVideoAdded, onVideoUpdated }
     // Add video to parent's list
     if (onVideoAdded) {
       onVideoAdded({
-        id: videoId || 'temp-' + Date.now(),
+        id: videoId ?? 'temp-' + Date.now(),
         title: file.name,
         status: 'uploading',
         progress: 0,
@@ -88,7 +88,7 @@ export function ChunkedUpload({ onUploadComplete, onVideoAdded, onVideoUpdated }
         
         // Update parent's video progress
         if (onVideoUpdated && sessionId) {
-          onVideoUpdated(result.videoId || sessionId, { 
+          onVideoUpdated(result.videoId ?? sessionId, { 
             progress: progress * 0.5 // 50% for upload
           });
         }

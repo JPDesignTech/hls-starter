@@ -2,6 +2,7 @@
 
 import * as React from 'react';
 import { useParams } from 'next/navigation';
+import type { FfprobeData, FfprobeStream } from 'fluent-ffmpeg';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
@@ -33,10 +34,15 @@ interface FileMetadata {
   analysisStatus: string;
 }
 
-interface ProbeData {
-  format?: any;
-  streams?: any[];
-}
+type ProbeData = FfprobeData;
+
+// Helper function to format numbers
+const formatNumber = (value: string | number | undefined): number => {
+  if (value === undefined || value === null) return 0;
+  if (typeof value === 'number') return value;
+  const parsed = parseFloat(String(value));
+  return isNaN(parsed) ? 0 : parsed;
+};
 
 export default function OverviewPage() {
   const params = useParams();
@@ -48,7 +54,7 @@ export default function OverviewPage() {
   const [error, setError] = React.useState<string | null>(null);
 
   React.useEffect(() => {
-    loadData();
+    void loadData();
   }, [fileId]);
 
   const loadData = async () => {
@@ -90,16 +96,18 @@ export default function OverviewPage() {
     }
   };
 
-  const formatBytes = (bytes: number): string => {
-    if (bytes < 1024) return bytes + ' B';
-    if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(2) + ' KB';
-    return (bytes / (1024 * 1024)).toFixed(2) + ' MB';
+  const formatBytes = (bytes: string | number): string => {
+    const numBytes = typeof bytes === 'string' ? parseInt(bytes) : bytes;
+    if (numBytes < 1024) return numBytes + ' B';
+    if (numBytes < 1024 * 1024) return (numBytes / 1024).toFixed(2) + ' KB';
+    return (numBytes / (1024 * 1024)).toFixed(2) + ' MB';
   };
 
-  const formatDuration = (seconds: number): string => {
-    const hours = Math.floor(seconds / 3600);
-    const minutes = Math.floor((seconds % 3600) / 60);
-    const secs = Math.floor(seconds % 60);
+  const formatDuration = (seconds: string | number): string => {
+    const numSeconds = typeof seconds === 'string' ? parseFloat(seconds) : seconds;
+    const hours = Math.floor(numSeconds / 3600);
+    const minutes = Math.floor((numSeconds % 3600) / 60);
+    const secs = Math.floor(numSeconds % 60);
     
     if (hours > 0) {
       return `${hours}:${minutes.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
@@ -182,7 +190,7 @@ export default function OverviewPage() {
                 </div>
                 <div>
                   <p className="text-sm text-gray-400 mb-1">File Type</p>
-                  <p className="text-white font-mono">{fileMetadata.fileType || 'Unknown'}</p>
+                  <p className="text-white font-mono">{fileMetadata.fileType ?? 'Unknown'}</p>
                 </div>
                 <div>
                   <p className="text-sm text-gray-400 mb-1">Uploaded At</p>
@@ -209,20 +217,20 @@ export default function OverviewPage() {
                 <div>
                   <p className="text-sm text-gray-400 mb-1">Format Name</p>
                   <p className="text-white font-mono text-lg">
-                    {probeData.format.format_name || 'Unknown'}
+                    {probeData.format.format_name ?? 'Unknown'}
                   </p>
                 </div>
                 <div>
                   <p className="text-sm text-gray-400 mb-1">Format Long Name</p>
                   <p className="text-white font-mono">
-                    {probeData.format.format_long_name || 'Unknown'}
+                    {probeData.format.format_long_name ?? 'Unknown'}
                   </p>
                 </div>
                 {probeData.format.duration && (
                   <div>
                     <p className="text-sm text-gray-400 mb-1">Duration</p>
                     <p className="text-white font-mono text-lg">
-                      {formatDuration(parseFloat(probeData.format.duration))}
+                      {formatDuration(probeData.format.duration)}
                     </p>
                   </div>
                 )}
@@ -230,7 +238,7 @@ export default function OverviewPage() {
                   <div>
                     <p className="text-sm text-gray-400 mb-1">File Size</p>
                     <p className="text-white font-mono">
-                      {formatBytes(parseInt(probeData.format.size))}
+                      {formatBytes(probeData.format.size)}
                     </p>
                   </div>
                 )}
@@ -238,7 +246,7 @@ export default function OverviewPage() {
                   <div>
                     <p className="text-sm text-gray-400 mb-1">Bitrate</p>
                     <p className="text-white font-mono text-lg">
-                      {(parseInt(probeData.format.bit_rate) / 1000000).toFixed(2)} Mbps
+                      {((typeof probeData.format.bit_rate === 'string' ? parseInt(probeData.format.bit_rate) : probeData.format.bit_rate) / 1000000).toFixed(2)} Mbps
                     </p>
                   </div>
                 )}
@@ -269,13 +277,13 @@ export default function OverviewPage() {
             </CardHeader>
             <CardContent>
               <div className="space-y-4">
-                {probeData.streams.map((stream: any, index: number) => (
+                {probeData.streams.map((stream: FfprobeStream, index: number) => (
                   <Card key={index} className="bg-black/30 border-white/10">
                     <CardHeader>
                       <div className="flex items-center gap-2">
-                        {getStreamTypeIcon(stream.codec_type)}
+                        {getStreamTypeIcon(stream.codec_type ?? 'unknown')}
                         <CardTitle className="text-white text-lg">
-                          Stream #{stream.index} - {stream.codec_type?.toUpperCase() || 'UNKNOWN'}
+                          Stream #{stream.index} - {stream.codec_type?.toUpperCase() ?? 'UNKNOWN'}
                         </CardTitle>
                       </div>
                     </CardHeader>
@@ -283,12 +291,12 @@ export default function OverviewPage() {
                       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                         <div>
                           <p className="text-sm text-gray-400 mb-1">Codec Name</p>
-                          <p className="text-white font-mono">{stream.codec_name || 'Unknown'}</p>
+                          <p className="text-white font-mono">{stream.codec_name ?? 'Unknown'}</p>
                         </div>
                         <div>
                           <p className="text-sm text-gray-400 mb-1">Codec Long Name</p>
                           <p className="text-white font-mono text-sm">
-                            {stream.codec_long_name || 'Unknown'}
+                            {stream.codec_long_name ?? 'Unknown'}
                           </p>
                         </div>
                         {stream.codec_type === 'video' && (
@@ -341,7 +349,7 @@ export default function OverviewPage() {
                           <div>
                             <p className="text-sm text-gray-400 mb-1">Bitrate</p>
                             <p className="text-white font-mono">
-                              {(parseInt(stream.bit_rate) / 1000).toFixed(0)} kbps
+                              {(formatNumber(stream.bit_rate) / 1000).toFixed(0)} kbps
                             </p>
                           </div>
                         )}
@@ -349,7 +357,7 @@ export default function OverviewPage() {
                           <div>
                             <p className="text-sm text-gray-400 mb-1">Duration</p>
                             <p className="text-white font-mono">
-                              {formatDuration(parseFloat(stream.duration))}
+                              {formatDuration(stream.duration)}
                             </p>
                           </div>
                         )}

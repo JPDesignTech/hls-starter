@@ -1,4 +1,4 @@
-import { ModuleQuiz } from '@/lib/tutorial/types/module-quiz';
+import { type ModuleQuiz } from '@/lib/tutorial/types/module-quiz';
 
 export const optimizationPerformanceQuiz: ModuleQuiz = {
   id: 'optimization-performance-quiz',

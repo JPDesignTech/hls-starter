@@ -11,6 +11,8 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
+import type { FfprobeData, FfprobeFormat, FfprobeStream } from 'fluent-ffmpeg';
+import Hls from 'hls.js';
 
 // Info popover component
 interface InfoPopoverProps {
@@ -20,7 +22,12 @@ interface InfoPopoverProps {
   specSection?: string;
 }
 
-const InfoPopover: React.FC<InfoPopoverProps> = ({ title, description, specLink, specSection }) => (
+const InfoPopover: React.FC<InfoPopoverProps> = ({
+  title,
+  description,
+  specLink,
+  specSection,
+}) => (
   <Popover>
     <PopoverTrigger asChild>
       <button className="inline-flex items-center justify-center w-4 h-4 rounded-full bg-gray-600 hover:bg-gray-500 transition-colors">
@@ -32,9 +39,9 @@ const InfoPopover: React.FC<InfoPopoverProps> = ({ title, description, specLink,
         <h4 className="font-semibold text-white">{title}</h4>
         <p className="text-sm text-gray-300">{description}</p>
         {specLink && (
-          <Link 
-            href={specLink} 
-            target="_blank" 
+          <Link
+            href={specLink}
+            target="_blank"
             className="text-xs text-blue-400 hover:text-blue-300 flex items-center gap-1"
           >
             <span>HLS Spec {specSection && `§${specSection}`}</span>
@@ -90,11 +97,11 @@ interface ParsedManifest {
 }
 
 interface ProbeData {
-  raw: any;
+  raw: FfprobeData;
   analysis: {
-    format: any;
-    video: any;
-    audio: any;
+    format: FfprobeFormat & { isFmp4?: boolean };
+    video: FfprobeStream;
+    audio: FfprobeStream;
     packets: any;
     frames: any;
     hls: {
@@ -116,8 +123,12 @@ interface BatchProbeData {
     url: string;
     success: boolean;
     error?: string;
-    raw?: any;
-    analysis?: any;
+    raw?: FfprobeData;
+    analysis?: {
+      format: FfprobeFormat;
+      video: FfprobeStream;
+      audio: FfprobeStream;
+    };
   }>;
   aggregateAnalysis: {
     totalSegments: number;
@@ -142,10 +153,10 @@ interface BatchProbeData {
 }
 
 // Import HLS.js dynamically to avoid SSR issues
-let Hls: any = null;
+let HlsClass: typeof Hls | null = null;
 if (typeof window !== 'undefined') {
-  import('hls.js').then((module) => {
-    Hls = module.default;
+  void import('hls.js').then((module) => {
+    HlsClass = module.default;
   });
 }
 
@@ -155,30 +166,39 @@ export default function VideoAnalyzePage() {
   const [videoData, setVideoData] = useState<VideoMetadata | null>(null);
   const [selectedManifest, setSelectedManifest] = useState<string>('');
   const [manifestContent, setManifestContent] = useState<string>('');
-  const [parsedManifest, setParsedManifest] = useState<ParsedManifest | null>(null);
+  const [parsedManifest, setParsedManifest] = useState<ParsedManifest | null>(
+    null
+  );
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [selectedSegment, setSelectedSegment] = useState<Segment | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
-  const [currentSegmentIndex, setCurrentSegmentIndex] = useState<number | null>(null);
+  const [currentSegmentIndex, setCurrentSegmentIndex] = useState<number | null>(
+    null
+  );
   const [probeData, setProbeData] = useState<ProbeData | null>(null);
   const [probingSegment, setProbingSegment] = useState(false);
   const [showProbeResults, setShowProbeResults] = useState(false);
-  const [batchProbeData, setBatchProbeData] = useState<BatchProbeData | null>(null);
+  const [batchProbeData, setBatchProbeData] = useState<BatchProbeData | null>(
+    null
+  );
   const [probingBatch, setProbingBatch] = useState(false);
   const [showBatchResults, setShowBatchResults] = useState(false);
   const [detailedAnalysis, setDetailedAnalysis] = useState(false);
   const [probeCache, setProbeCache] = useState<Record<string, ProbeData>>({});
   const [autoplayEnabled, setAutoplayEnabled] = useState(false);
   const videoRef = useRef<HTMLVideoElement>(null);
-  const hlsRef = useRef<any>(null);
+  const hlsRef = useRef<Hls | null>(null);
 
   // Helper function to resolve URLs when using the HLS proxy
   const resolveUrl = (relativeUrl: string, baseUrl: string): string => {
     // If the URL is already absolute, return it as-is
-    if (relativeUrl.startsWith('http://') || relativeUrl.startsWith('https://')) {
+    if (
+      relativeUrl.startsWith('http://') ??
+      relativeUrl.startsWith('https://')
+    ) {
       return relativeUrl;
     }
 
@@ -187,11 +207,14 @@ export default function VideoAnalyzePage() {
       try {
         const params = new URLSearchParams(baseUrl.split('?')[1]);
         const originalUrl = params.get('url');
-        
+
         if (originalUrl) {
           const baseUrlObj = new URL(originalUrl);
-          const basePath = originalUrl.substring(0, originalUrl.lastIndexOf('/') + 1);
-          
+          const basePath = originalUrl.substring(
+            0,
+            originalUrl.lastIndexOf('/') + 1
+          );
+
           let resolvedUrl: string;
           if (relativeUrl.startsWith('/')) {
             // Absolute path from root
@@ -200,7 +223,7 @@ export default function VideoAnalyzePage() {
             // Relative path
             resolvedUrl = basePath + relativeUrl;
           }
-          
+
           // Return the resolved URL through the proxy
           return `/api/hls-proxy?url=${encodeURIComponent(resolvedUrl)}`;
         }
@@ -208,7 +231,7 @@ export default function VideoAnalyzePage() {
         console.error('Error extracting URL from proxy:', e);
       }
     }
-    
+
     // For regular URLs, use the URL constructor
     try {
       return new URL(relativeUrl, baseUrl).href;
@@ -226,37 +249,43 @@ export default function VideoAnalyzePage() {
         if (!response.ok) throw new Error('Failed to fetch video data');
         const data = await response.json();
         console.log('Video data:', data);
-        
+
         // If we have a master.m3u8 URL but no files array, create a synthetic files array
-        if ((!data.files || data.files.length === 0) && data.url && data.url.includes('master.m3u8')) {
+        if (
+          (!data.files || data.files.length === 0) &&
+          data.url?.includes('master.m3u8')
+        ) {
           console.log('Creating synthetic files array from master URL');
           const baseUrl = data.url.substring(0, data.url.lastIndexOf('/'));
-          
+
           // Create synthetic file entries for Google Transcoder output
           data.files = [
             {
               name: `${videoId}/master.m3u8`,
               url: data.url,
-              size: 1024 // Unknown size
-            }
+              size: 1024, // Unknown size
+            },
           ];
-          
+
           // Add quality-specific playlists based on Google Transcoder naming
           const qualities = ['1080p', '720p', '480p', '360p'];
           qualities.forEach((quality) => {
             data.files.push({
               name: `${videoId}/hls-${quality}.m3u8`,
               url: `${baseUrl}/hls-${quality}.m3u8`,
-              size: 1024 // Unknown size
+              size: 1024, // Unknown size
             });
           });
         }
-        
+
         setVideoData(data);
-        
+
         // If we have files array, set master manifest as default
         if (data.files?.length > 0) {
-          const masterFile = data.files.find((f: any) => f.name.includes('master.m3u8'));
+          const masterFile = data.files.find(
+            (f: { name: string; url: string; size: number }) =>
+              f.name.includes('master.m3u8')
+          );
           if (masterFile) {
             setSelectedManifest(masterFile.url);
           }
@@ -265,26 +294,28 @@ export default function VideoAnalyzePage() {
           setSelectedManifest(data.url);
         }
       } catch (err) {
-        setError(err instanceof Error ? err.message : 'Failed to load video data');
+        setError(
+          err instanceof Error ? err.message : 'Failed to load video data'
+        );
       } finally {
         setLoading(false);
       }
     }
-    
-    fetchVideoData();
+
+    void fetchVideoData();
   }, [videoId]);
 
   // Fetch and parse manifest content
   useEffect(() => {
     if (!selectedManifest) return;
-    
+
     async function fetchManifest() {
       try {
         const response = await fetch(selectedManifest);
         if (!response.ok) throw new Error('Failed to fetch manifest');
         const content = await response.text();
         setManifestContent(content);
-        
+
         // Parse the manifest
         const parsed = parseManifest(content, selectedManifest);
         console.log('Parsed manifest:', parsed);
@@ -295,36 +326,36 @@ export default function VideoAnalyzePage() {
         console.error('Error fetching manifest:', err);
       }
     }
-    
-    fetchManifest();
+
+    void fetchManifest();
   }, [selectedManifest]);
 
   // Parse HLS manifest
   function parseManifest(content: string, manifestUrl: string): ParsedManifest {
-    const lines = content.split('\n').filter(line => line.trim());
+    const lines = content.split('\n').filter((line) => line.trim());
     const parsed: ParsedManifest = {
       version: 3,
       targetDuration: 0,
       segments: [],
       totalDuration: 0,
     };
-    
+
     // Check if this is a master playlist
     if (content.includes('#EXT-X-STREAM-INF')) {
       parsed.qualityLevels = [];
       for (let i = 0; i < lines.length; i++) {
         if (lines[i].startsWith('#EXT-X-STREAM-INF')) {
-          const bandwidthMatch = lines[i].match(/BANDWIDTH=(\d+)/);
-          const resolutionMatch = lines[i].match(/RESOLUTION=([^,\s]+)/);
-          
+          const bandwidthMatch = /BANDWIDTH=(\d+)/.exec(lines[i]);
+          const resolutionMatch = /RESOLUTION=([^,\s]+)/.exec(lines[i]);
+
           // For Google Transcoder output, extract quality from the URI
           if (i + 1 < lines.length && !lines[i + 1].startsWith('#')) {
             const uri = lines[i + 1];
-            let resolution = resolutionMatch?.[1] || 'Unknown';
+            let resolution = resolutionMatch?.[1] ?? 'Unknown';
             let qualityName = 'Unknown';
-            
+
             // Extract quality from Google Transcoder naming (hls-1080p.m3u8, etc.)
-            const qualityMatch = uri.match(/hls-(\d+p)\.m3u8/);
+            const qualityMatch = /hls-(\d+p)\.m3u8/.exec(uri);
             if (qualityMatch) {
               qualityName = qualityMatch[1];
               // Map quality to resolution if not provided
@@ -338,9 +369,9 @@ export default function VideoAnalyzePage() {
                 resolution = resolutionMap[qualityName];
               }
             }
-            
+
             parsed.qualityLevels.push({
-              bandwidth: parseInt(bandwidthMatch?.[1] || '0'),
+              bandwidth: parseInt(bandwidthMatch?.[1] ?? '0'),
               resolution: resolution,
               uri: uri,
             });
@@ -352,18 +383,18 @@ export default function VideoAnalyzePage() {
       let segmentIndex = 0;
       let byteRangeStart = 0;
       let initSegment: string | null = null;
-      
+
       // Check for fMP4 initialization segment
-      for (let i = 0; i < lines.length; i++) {
-        if (lines[i].startsWith('#EXT-X-MAP')) {
-          const uriMatch = lines[i].match(/URI="([^"]+)"/);
+      for (const line of lines) {
+        if (line.startsWith('#EXT-X-MAP')) {
+          const uriMatch = /URI="([^"]+)"/.exec(line);
           if (uriMatch) {
             initSegment = uriMatch[1];
           }
           break;
         }
       }
-      
+
       for (let i = 0; i < lines.length; i++) {
         if (lines[i].startsWith('#EXT-X-VERSION')) {
           parsed.version = parseInt(lines[i].split(':')[1]);
@@ -371,52 +402,66 @@ export default function VideoAnalyzePage() {
           parsed.targetDuration = parseInt(lines[i].split(':')[1]);
         } else if (lines[i].startsWith('#EXTINF')) {
           const duration = parseFloat(lines[i].split(':')[1].split(',')[0]);
-          
+
           // Check if next line is BYTERANGE (Google Transcoder format)
           let byteRange = null;
           let uriLineOffset = 1;
-          
-          if (i + 1 < lines.length && lines[i + 1].startsWith('#EXT-X-BYTERANGE')) {
-            const rangeMatch = lines[i + 1].match(/#EXT-X-BYTERANGE:(\d+)(@(\d+))?/);
+
+          if (
+            i + 1 < lines.length &&
+            lines[i + 1].startsWith('#EXT-X-BYTERANGE')
+          ) {
+            const rangeMatch = /#EXT-X-BYTERANGE:(\d+)(@(\d+))?/.exec(
+              lines[i + 1]
+            );
             if (rangeMatch) {
               const length = parseInt(rangeMatch[1]);
-              const offset = rangeMatch[3] ? parseInt(rangeMatch[3]) : byteRangeStart;
+              const offset = rangeMatch[3]
+                ? parseInt(rangeMatch[3])
+                : byteRangeStart;
               byteRange = { length, offset };
               byteRangeStart = offset + length;
               uriLineOffset = 2; // URI is 2 lines after EXTINF
             }
           }
-          
+
           // Get the URI (either 1 or 2 lines after EXTINF)
-          if (i + uriLineOffset < lines.length && !lines[i + uriLineOffset].startsWith('#')) {
+          if (
+            i + uriLineOffset < lines.length &&
+            !lines[i + uriLineOffset].startsWith('#')
+          ) {
             const segment: Segment = {
               duration,
               uri: lines[i + uriLineOffset],
               index: segmentIndex++,
-              ...(byteRange && { byteRange })
+              ...(byteRange && { byteRange }),
             };
-            
+
             parsed.segments.push(segment);
             parsed.totalDuration += duration;
           }
         } else if (lines[i].startsWith('#EXT-X-MEDIA')) {
           // Handle fMP4 media tags - these can contain segments in URI attributes
-          const uriMatch = lines[i].match(/URI="([^"]+)"/);
-          if (uriMatch && uriMatch[1].match(/\.(mp4|m4s)$/i)) {
+          const uriMatch = /URI="([^"]+)"/.exec(lines[i]);
+          if (uriMatch && /\.(mp4|m4s)$/i.exec(uriMatch[1])) {
             // This is likely a segment, add it with a default duration
             const segment: Segment = {
-              duration: parsed.targetDuration || 6, // Use target duration as estimate
+              duration: parsed.targetDuration ?? 6, // Use target duration as estimate
               uri: uriMatch[1],
               index: segmentIndex++,
             };
             parsed.segments.push(segment);
             parsed.totalDuration += segment.duration;
           }
-        } else if (!lines[i].startsWith('#') && lines[i].trim() && lines[i].match(/\.(mp4|m4s)$/i)) {
+        } else if (
+          !lines[i].startsWith('#') &&
+          lines[i].trim() &&
+          /\.(mp4|m4s)$/i.exec(lines[i])
+        ) {
           // Handle standalone fMP4 segment files without EXTINF tags
           // This happens in some fMP4 playlists
           const segment: Segment = {
-            duration: parsed.targetDuration || 6, // Use target duration as estimate
+            duration: parsed.targetDuration ?? 6, // Use target duration as estimate
             uri: lines[i].trim(),
             index: segmentIndex++,
           };
@@ -424,18 +469,23 @@ export default function VideoAnalyzePage() {
           parsed.totalDuration += segment.duration;
         }
       }
-      
+
       // If we found an init segment but no regular segments, it might be a different format
       if (initSegment && parsed.segments.length === 0) {
-        console.log('Found init segment but no media segments, checking for different format');
-        
+        console.log(
+          'Found init segment but no media segments, checking for different format'
+        );
+
         // Look for segment files without EXTINF tags (common in fMP4)
-        for (let i = 0; i < lines.length; i++) {
-          if (!lines[i].startsWith('#') && lines[i].trim() && 
-              (lines[i].match(/\.(mp4|m4s)$/i) || lines[i].match(/fileSequence\d+/))) {
+        for (const line of lines) {
+          if (
+            !line.startsWith('#') &&
+            line.trim() &&
+            (/\.(mp4|m4s)$/i.exec(line) || /fileSequence\d+/.exec(line))
+          ) {
             const segment: Segment = {
-              duration: parsed.targetDuration || 6,
-              uri: lines[i].trim(),
+              duration: parsed.targetDuration ?? 6,
+              uri: line.trim(),
               index: segmentIndex++,
             };
             parsed.segments.push(segment);
@@ -443,13 +493,13 @@ export default function VideoAnalyzePage() {
           }
         }
       }
-      
+
       // Store the initialization segment URL if found
       if (initSegment) {
         parsed.initSegment = initSegment;
       }
     }
-    
+
     console.log('Parsed manifest:', parsed);
     return parsed;
   }
@@ -486,46 +536,53 @@ export default function VideoAnalyzePage() {
 
   // Initialize HLS player when a playlist is selected
   useEffect(() => {
-    if (!selectedManifest || !videoRef.current || !Hls || !selectedManifest.endsWith('.m3u8')) return;
+    if (
+      !selectedManifest ||
+      !videoRef.current ||
+      !Hls ||
+      !selectedManifest.endsWith('.m3u8')
+    )
+      return;
 
     const video = videoRef.current;
-    
+
     // Only load quality-specific playlists, not the master
-    const isQualityPlaylist = selectedManifest.includes('hls-') && !selectedManifest.includes('master');
+    const isQualityPlaylist =
+      selectedManifest.includes('hls-') && !selectedManifest.includes('master');
     if (!isQualityPlaylist && videoData?.url) {
       // If master playlist is selected, try to auto-select first quality
       return;
     }
-    
-    if (Hls.isSupported()) {
+
+    if (HlsClass?.isSupported()) {
       // Destroy existing instance
       if (hlsRef.current) {
         hlsRef.current.destroy();
       }
-      
-      const hls = new Hls({
+
+      const hls = new HlsClass({
         debug: false,
         enableWorker: true,
         lowLatencyMode: false,
       });
       hlsRef.current = hls;
-      
+
       hls.loadSource(selectedManifest);
       hls.attachMedia(video);
-      
-      hls.on(Hls.Events.MANIFEST_PARSED, () => {
+
+      hls.on(HlsClass.Events.MANIFEST_PARSED, () => {
         console.log('HLS manifest loaded for:', selectedManifest);
-        video.play().catch(e => console.log('Autoplay prevented:', e));
+        video.play().catch((e) => console.log('Autoplay prevented:', e));
       });
 
-      hls.on(Hls.Events.ERROR, (event: any, data: any) => {
+      hls.on(HlsClass.Events.ERROR, (event, data) => {
         if (data.fatal) {
           console.error('Fatal HLS error:', data);
           switch (data.type) {
-            case Hls.ErrorTypes.NETWORK_ERROR:
+            case HlsClass?.ErrorTypes.NETWORK_ERROR:
               hls.startLoad();
               break;
-            case Hls.ErrorTypes.MEDIA_ERROR:
+            case HlsClass?.ErrorTypes.MEDIA_ERROR:
               hls.recoverMediaError();
               break;
             default:
@@ -542,23 +599,26 @@ export default function VideoAnalyzePage() {
       // For Safari native HLS support
       video.src = selectedManifest;
     }
-  }, [selectedManifest, Hls, videoData?.url]);
+  }, [selectedManifest, HlsClass, videoData?.url]);
 
   // Update current time and detect current segment
   useEffect(() => {
     if (!videoRef.current) return;
 
     const video = videoRef.current;
-    
+
     const updateTime = () => {
       setCurrentTime(video.currentTime);
-      
+
       // Find current segment based on time
       if (parsedManifest?.segments) {
         let accumulatedTime = 0;
         for (let i = 0; i < parsedManifest.segments.length; i++) {
-          if (video.currentTime >= accumulatedTime && 
-              video.currentTime < accumulatedTime + parsedManifest.segments[i].duration) {
+          if (
+            video.currentTime >= accumulatedTime &&
+            video.currentTime <
+              accumulatedTime + parsedManifest.segments[i].duration
+          ) {
             setCurrentSegmentIndex(i);
             break;
           }
@@ -591,27 +651,27 @@ export default function VideoAnalyzePage() {
   // Jump to segment
   const jumpToSegment = (segmentIndex: number) => {
     if (!videoRef.current || !parsedManifest?.segments) return;
-    
+
     let targetTime = 0;
     for (let i = 0; i < segmentIndex; i++) {
       targetTime += parsedManifest.segments[i].duration;
     }
-    
+
     videoRef.current.currentTime = targetTime;
     setSelectedSegment(parsedManifest.segments[segmentIndex]);
-    
+
     // Only autoplay if enabled
     if (autoplayEnabled && videoRef.current.paused) {
-      videoRef.current.play();
+      void videoRef.current.play();
     }
   };
 
   // Playback controls
   const togglePlayPause = () => {
     if (!videoRef.current) return;
-    
+
     if (videoRef.current.paused) {
-      videoRef.current.play();
+      void videoRef.current.play();
     } else {
       videoRef.current.pause();
     }
@@ -619,7 +679,10 @@ export default function VideoAnalyzePage() {
 
   const skipToNextSegment = () => {
     if (currentSegmentIndex !== null && parsedManifest?.segments) {
-      const nextIndex = Math.min(currentSegmentIndex + 1, parsedManifest.segments.length - 1);
+      const nextIndex = Math.min(
+        currentSegmentIndex + 1,
+        parsedManifest.segments.length - 1
+      );
       jumpToSegment(nextIndex);
     }
   };
@@ -632,9 +695,9 @@ export default function VideoAnalyzePage() {
   };
 
   // Probe segment with ffprobe
-  const probeSegment = async (segment: Segment, forceRefresh: boolean = false) => {
+  const probeSegment = async (segment: Segment, forceRefresh = false) => {
     const cacheKey = `${segment.index}-${segment.uri}`;
-    
+
     // Check cache first unless force refresh
     if (!forceRefresh && probeCache[cacheKey]) {
       console.log('Using cached probe data for segment', segment.index);
@@ -642,16 +705,16 @@ export default function VideoAnalyzePage() {
       setShowProbeResults(true);
       return;
     }
-    
+
     setProbingSegment(true);
     setShowProbeResults(true);
     setProbeData(null);
 
     try {
-      const segmentUrl = segment.uri.startsWith('http') 
-        ? segment.uri 
+      const segmentUrl = segment.uri.startsWith('http')
+        ? segment.uri
         : resolveUrl(segment.uri, selectedManifest);
-        
+
       // Resolve init segment URL if present
       let initSegmentUrl = undefined;
       if (parsedManifest?.initSegment) {
@@ -670,7 +733,7 @@ export default function VideoAnalyzePage() {
           initSegmentUrl, // Pass init segment URL for fMP4
           detailed: detailedAnalysis,
           byteRange: segment.byteRange,
-          segmentDuration: segment.duration
+          segmentDuration: segment.duration,
         }),
       });
 
@@ -680,11 +743,11 @@ export default function VideoAnalyzePage() {
 
       const data: ProbeData = await response.json();
       setProbeData(data);
-      
+
       // Cache the result
-      setProbeCache(prev => ({
+      setProbeCache((prev) => ({
         ...prev,
-        [cacheKey]: data
+        [cacheKey]: data,
       }));
     } catch (error) {
       console.error('Error probing segment:', error);
@@ -697,7 +760,7 @@ export default function VideoAnalyzePage() {
   // Probe all segments in batch
   const probeBatchSegments = async () => {
     if (!parsedManifest) return; // Add null check
-    
+
     setProbingBatch(true);
     setBatchProbeData(null);
 
@@ -709,22 +772,22 @@ export default function VideoAnalyzePage() {
           ? parsedManifest.initSegment
           : resolveUrl(parsedManifest.initSegment, selectedManifest);
       }
-      
+
       // Prepare segment URLs with metadata
-      const segmentUrls = parsedManifest.segments.map(segment => {
+      const segmentUrls = parsedManifest.segments.map((segment) => {
         const url = segment.uri.startsWith('http')
           ? segment.uri
           : resolveUrl(segment.uri, selectedManifest);
-        
+
         return {
           url,
           byteRange: segment.byteRange,
-          duration: segment.duration
+          duration: segment.duration,
         };
       });
 
       console.log('[Batch Probe] Analyzing', segmentUrls.length, 'segments');
-      
+
       const response = await fetch(`/api/video/${videoId}/probe-segment`, {
         method: 'POST',
         headers: {
@@ -734,7 +797,7 @@ export default function VideoAnalyzePage() {
           segmentUrls,
           initSegmentUrl, // Pass init segment URL for fMP4
           batchMode: true,
-          detailed: false // Always use basic mode for batch to avoid timeouts
+          detailed: false, // Always use basic mode for batch to avoid timeouts
         }),
       });
 
@@ -744,19 +807,38 @@ export default function VideoAnalyzePage() {
 
       const data: BatchProbeData = await response.json();
       setBatchProbeData(data);
-      
+
       // Cache individual results
       data.results.forEach((result, index) => {
-        if (result.success && parsedManifest.segments[index]) {
+        if (
+          result.success &&
+          result.raw &&
+          result.analysis &&
+          parsedManifest.segments[index]
+        ) {
           const segment = parsedManifest.segments[index];
           const cacheKey = `${segment.index}-${segment.uri}`;
-          setProbeCache(prev => ({
+          const analysis = result.analysis;
+          const probeData: ProbeData = {
+            raw: result.raw,
+            analysis: {
+              format: analysis.format,
+              video: analysis.video,
+              audio: analysis.audio,
+              packets: null,
+              frames: null,
+              hls: {
+                compliant: true,
+                issues: [],
+                recommendations: [],
+                specs: [],
+              },
+            },
+            segmentUrl: result.url,
+          };
+          setProbeCache((prev) => ({
             ...prev,
-            [cacheKey]: {
-              raw: result.raw,
-              analysis: result.analysis,
-              segmentUrl: result.url
-            }
+            [cacheKey]: probeData,
           }));
         }
       });
@@ -776,10 +858,12 @@ export default function VideoAnalyzePage() {
       manifest: selectedManifest,
       parsedManifest,
       probeData,
-      batchProbeData
+      batchProbeData,
     };
-    
-    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+
+    const blob = new Blob([JSON.stringify(data, null, 2)], {
+      type: 'application/json',
+    });
     const url = window.URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
@@ -831,7 +915,7 @@ export default function VideoAnalyzePage() {
       <div className="min-h-screen flex items-center justify-center">
         <Card className="bg-red-500/20 border-red-500/30">
           <CardContent className="pt-6">
-            <p className="text-red-300">{error || 'Video not found'}</p>
+            <p className="text-red-300">{error ?? 'Video not found'}</p>
           </CardContent>
         </Card>
       </div>
@@ -858,7 +942,7 @@ export default function VideoAnalyzePage() {
               <p className="text-gray-300">Video ID: {videoId}</p>
             </div>
           </div>
-          <Link href={videoData.url || '#'} target="_blank">
+          <Link href={videoData.url ?? '#'} target="_blank">
             <Button className="bg-purple-600 hover:bg-purple-700">
               <Play className="mr-2 h-4 w-4" />
               Play Video
@@ -874,7 +958,9 @@ export default function VideoAnalyzePage() {
               HLS Playlist Player
             </CardTitle>
             <CardDescription className="text-gray-300">
-              {selectedManifest ? `Playing: ${selectedManifest.split('/').pop()}` : 'Select a quality playlist to play'}
+              {selectedManifest
+                ? `Playing: ${selectedManifest.split('/').pop()}`
+                : 'Select a quality playlist to play'}
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -896,22 +982,29 @@ export default function VideoAnalyzePage() {
               {/* Custom Controls */}
               <div className="space-y-3">
                 {/* Progress Bar */}
-                <div className="bg-white/10 rounded-full h-2 relative cursor-pointer"
-                     onClick={(e) => {
-                       if (!videoRef.current) return;
-                       const rect = e.currentTarget.getBoundingClientRect();
-                       const x = e.clientX - rect.left;
-                       const percentage = x / rect.width;
-                       videoRef.current.currentTime = percentage * duration;
-                     }}>
-                  <div className="bg-purple-500 h-full rounded-full transition-all"
-                       style={{ width: `${(currentTime / duration) * 100}%` }} />
+                <div
+                  className="bg-white/10 rounded-full h-2 relative cursor-pointer"
+                  onClick={(e) => {
+                    if (!videoRef.current) return;
+                    const rect = e.currentTarget.getBoundingClientRect();
+                    const x = e.clientX - rect.left;
+                    const percentage = x / rect.width;
+                    videoRef.current.currentTime = percentage * duration;
+                  }}
+                >
+                  <div
+                    className="bg-purple-500 h-full rounded-full transition-all"
+                    style={{ width: `${(currentTime / duration) * 100}%` }}
+                  />
                   {/* Segment markers */}
                   {parsedManifest?.segments.map((segment, idx) => {
-                    const startPercent = (parsedManifest.segments
-                      .slice(0, idx)
-                      .reduce((acc, s) => acc + s.duration, 0) / parsedManifest.totalDuration) * 100;
-                    
+                    const startPercent =
+                      (parsedManifest.segments
+                        .slice(0, idx)
+                        .reduce((acc, s) => acc + s.duration, 0) /
+                        parsedManifest.totalDuration) *
+                      100;
+
                     return (
                       <div
                         key={idx}
@@ -939,7 +1032,7 @@ export default function VideoAnalyzePage() {
                   >
                     <SkipBack className="h-4 w-4" />
                   </Button>
-                  
+
                   <Button
                     size="lg"
                     className="bg-purple-600 hover:bg-purple-700 text-white"
@@ -951,27 +1044,35 @@ export default function VideoAnalyzePage() {
                       <Play className="h-6 w-6" />
                     )}
                   </Button>
-                  
+
                   <Button
                     size="sm"
                     variant="ghost"
                     className="text-white hover:bg-white/20"
                     onClick={skipToNextSegment}
-                    disabled={currentSegmentIndex === (parsedManifest?.segments.length || 0) - 1}
+                    disabled={
+                      currentSegmentIndex ===
+                      (parsedManifest?.segments.length ?? 0) - 1
+                    }
                   >
                     <SkipForward className="h-4 w-4" />
                   </Button>
                 </div>
 
                 {/* Current Segment Info */}
-                {currentSegmentIndex !== null && parsedManifest?.segments[currentSegmentIndex] && (
-                  <div className="bg-white/5 rounded-lg p-3 text-sm">
-                    <p className="text-gray-400">Now Playing</p>
-                    <p className="text-white font-mono">
-                      Segment #{currentSegmentIndex} • {parsedManifest.segments[currentSegmentIndex].duration.toFixed(3)}s
-                    </p>
-                  </div>
-                )}
+                {currentSegmentIndex !== null &&
+                  parsedManifest?.segments[currentSegmentIndex] && (
+                    <div className="bg-white/5 rounded-lg p-3 text-sm">
+                      <p className="text-gray-400">Now Playing</p>
+                      <p className="text-white font-mono">
+                        Segment #{currentSegmentIndex} •{' '}
+                        {parsedManifest.segments[
+                          currentSegmentIndex
+                        ].duration.toFixed(3)}
+                        s
+                      </p>
+                    </div>
+                  )}
               </div>
             </div>
           </CardContent>
@@ -987,7 +1088,8 @@ export default function VideoAnalyzePage() {
                   HLS Files
                 </CardTitle>
                 <CardDescription className="text-gray-300">
-                  {videoData.files?.length || (videoData.isOriginal ? 1 : 0)} files generated
+                  {videoData.files?.length ?? (videoData.isOriginal ? 1 : 0)}{' '}
+                  files generated
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-2">
@@ -1001,7 +1103,7 @@ export default function VideoAnalyzePage() {
                           : 'bg-white/5 hover:bg-white/10'
                       } border border-white/20`}
                     >
-                      <div 
+                      <div
                         onClick={() => setSelectedManifest(file.url)}
                         className="cursor-pointer"
                       >
@@ -1022,13 +1124,20 @@ export default function VideoAnalyzePage() {
                           className="text-purple-300 hover:text-purple-200 text-xs"
                           onClick={(e) => {
                             e.stopPropagation();
-                            downloadFile(file.url, file.name.split('/').pop() || 'file');
+                            void downloadFile(
+                              file.url,
+                              file.name.split('/').pop() ?? 'file'
+                            );
                           }}
                         >
                           <Download className="h-3 w-3 mr-1" />
                           Download
                         </Button>
-                        <Link href={file.url} target="_blank" onClick={(e) => e.stopPropagation()}>
+                        <Link
+                          href={file.url}
+                          target="_blank"
+                          onClick={(e) => e.stopPropagation()}
+                        >
                           <Button
                             size="sm"
                             variant="ghost"
@@ -1049,7 +1158,7 @@ export default function VideoAnalyzePage() {
                       <span className="text-sm text-white">Original Video</span>
                     </div>
                     <p className="text-xs text-gray-400 mb-3">
-                      {videoData.error || 'Video served without transcoding'}
+                      {videoData.error ?? 'Video served without transcoding'}
                     </p>
                     <div className="flex gap-2">
                       <Link href={videoData.url} target="_blank">
@@ -1084,7 +1193,9 @@ export default function VideoAnalyzePage() {
                 <div>
                   <p className="text-sm text-gray-400">Processed At</p>
                   <p className="text-white">
-                    {videoData.processedAt ? new Date(videoData.processedAt).toLocaleString() : 'Not processed yet'}
+                    {videoData.processedAt
+                      ? new Date(videoData.processedAt).toLocaleString()
+                      : 'Not processed yet'}
                   </p>
                 </div>
                 <div>
@@ -1092,7 +1203,7 @@ export default function VideoAnalyzePage() {
                   <div className="flex flex-wrap gap-2 mt-1">
                     {videoData.qualities?.map((q, index) => (
                       <span
-                        key={`${q.name}-${q.bandwidth || index}`}
+                        key={`${q.name}-${q.bandwidth ?? index}`}
                         className="px-2 py-1 bg-purple-600/30 text-purple-300 rounded text-xs"
                       >
                         {q.name}
@@ -1130,11 +1241,13 @@ export default function VideoAnalyzePage() {
                   Manifest Analysis
                 </CardTitle>
                 <CardDescription className="text-gray-300">
-                  {selectedManifest ? selectedManifest.split('/').pop() : 'Select a manifest file'}
+                  {selectedManifest
+                    ? selectedManifest.split('/').pop()
+                    : 'Select a manifest file'}
                 </CardDescription>
               </CardHeader>
               <CardContent>
-                {selectedManifest && selectedManifest.endsWith('.m3u8') ? (
+                {selectedManifest?.endsWith('.m3u8') ? (
                   parsedManifest && (
                     <div className="space-y-6">
                       {/* Manifest Overview */}
@@ -1221,7 +1334,8 @@ export default function VideoAnalyzePage() {
                                     {level.resolution}
                                   </span>
                                   <span className="text-gray-400 ml-3">
-                                    {(level.bandwidth / 1000000).toFixed(2)} Mbps
+                                    {(level.bandwidth / 1000000).toFixed(2)}{' '}
+                                    Mbps
                                   </span>
                                 </div>
                                 <Button
@@ -1229,7 +1343,10 @@ export default function VideoAnalyzePage() {
                                   variant="ghost"
                                   className="text-purple-300 hover:text-purple-200"
                                   onClick={() => {
-                                    const fullUrl = resolveUrl(level.uri, selectedManifest);
+                                    const fullUrl = resolveUrl(
+                                      level.uri,
+                                      selectedManifest
+                                    );
                                     setSelectedManifest(fullUrl);
                                   }}
                                 >
@@ -1279,35 +1396,51 @@ export default function VideoAnalyzePage() {
                               </Button>
                             </div>
                           </div>
-                          
+
                           {/* Visual Timeline */}
                           <div className="bg-black/30 rounded-lg p-4 mb-4">
                             <div className="relative h-16 bg-white/5 rounded overflow-hidden">
                               {parsedManifest.segments.map((segment, idx) => {
-                                const startPercent = (parsedManifest.segments
-                                  .slice(0, idx)
-                                  .reduce((acc, s) => acc + s.duration, 0) / parsedManifest.totalDuration) * 100;
-                                const widthPercent = (segment.duration / parsedManifest.totalDuration) * 100;
-                                
+                                const startPercent =
+                                  (parsedManifest.segments
+                                    .slice(0, idx)
+                                    .reduce((acc, s) => acc + s.duration, 0) /
+                                    parsedManifest.totalDuration) *
+                                  100;
+                                const widthPercent =
+                                  (segment.duration /
+                                    parsedManifest.totalDuration) *
+                                  100;
+
                                 // Create color based on segment index for variety
                                 const hue = (idx * 137.5) % 360; // Golden angle for good color distribution
                                 const color = `hsl(${hue}, 70%, 50%)`;
-                                
+
                                 return (
                                   <div
                                     key={segment.index}
                                     className={`absolute h-full transition-all cursor-pointer group hover:z-10 ${
-                                      currentSegmentIndex === idx ? 'ring-2 ring-white z-20' : ''
+                                      currentSegmentIndex === idx
+                                        ? 'ring-2 ring-white z-20'
+                                        : ''
                                     }`}
                                     style={{
                                       left: `${startPercent}%`,
                                       width: `${widthPercent}%`,
                                       backgroundColor: color,
                                       borderRight: '1px solid rgba(0,0,0,0.3)',
-                                      opacity: currentSegmentIndex === idx ? 1 : 0.8,
+                                      opacity:
+                                        currentSegmentIndex === idx ? 1 : 0.8,
                                     }}
-                                    onMouseEnter={(e) => e.currentTarget.style.opacity = '1'}
-                                    onMouseLeave={(e) => e.currentTarget.style.opacity = currentSegmentIndex === idx ? '1' : '0.8'}
+                                    onMouseEnter={(e) =>
+                                      (e.currentTarget.style.opacity = '1')
+                                    }
+                                    onMouseLeave={(e) =>
+                                      (e.currentTarget.style.opacity =
+                                        currentSegmentIndex === idx
+                                          ? '1'
+                                          : '0.8')
+                                    }
                                     onClick={() => {
                                       setSelectedSegment(segment);
                                       jumpToSegment(idx);
@@ -1315,7 +1448,9 @@ export default function VideoAnalyzePage() {
                                     title={`Segment #${segment.index}: ${segment.duration.toFixed(3)}s • Click to jump`}
                                   >
                                     {/* Analyzed indicator */}
-                                    {probeCache[`${segment.index}-${segment.uri}`] && (
+                                    {probeCache[
+                                      `${segment.index}-${segment.uri}`
+                                    ] && (
                                       <div className="absolute top-0 right-0 w-2 h-2 bg-green-400 rounded-full m-1" />
                                     )}
                                     <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
@@ -1334,15 +1469,19 @@ export default function VideoAnalyzePage() {
                             </div>
                             <div className="flex justify-between mt-2 text-xs text-gray-400">
                               <span>0:00</span>
-                              <span>{formatDuration(parsedManifest.totalDuration)}</span>
+                              <span>
+                                {formatDuration(parsedManifest.totalDuration)}
+                              </span>
                             </div>
                           </div>
-                          
+
                           {/* Selected Segment Details */}
                           {selectedSegment && (
                             <div className="bg-white/5 rounded-lg p-4 mb-4 border border-purple-500/30">
                               <div className="flex justify-between items-start mb-2">
-                                <h4 className="text-white font-semibold">Segment Details</h4>
+                                <h4 className="text-white font-semibold">
+                                  Segment Details
+                                </h4>
                                 <button
                                   onClick={() => {
                                     setSelectedSegment(null);
@@ -1357,11 +1496,15 @@ export default function VideoAnalyzePage() {
                               <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
                                 <div>
                                   <p className="text-gray-400">Index</p>
-                                  <p className="text-white font-mono">#{selectedSegment.index}</p>
+                                  <p className="text-white font-mono">
+                                    #{selectedSegment.index}
+                                  </p>
                                 </div>
                                 <div>
                                   <p className="text-gray-400">Duration</p>
-                                  <p className="text-white font-mono">{selectedSegment.duration.toFixed(3)}s</p>
+                                  <p className="text-white font-mono">
+                                    {selectedSegment.duration.toFixed(3)}s
+                                  </p>
                                 </div>
                                 <div>
                                   <p className="text-gray-400">Start Time</p>
@@ -1385,16 +1528,21 @@ export default function VideoAnalyzePage() {
                                 </div>
                               </div>
                               <div className="mt-3">
-                                <p className="text-gray-400 text-sm mb-1">Filename</p>
+                                <p className="text-gray-400 text-sm mb-1">
+                                  Filename
+                                </p>
                                 <p className="text-white font-mono text-xs break-all bg-black/30 p-2 rounded">
                                   {selectedSegment.uri}
                                 </p>
                               </div>
                               {selectedSegment.byteRange && (
                                 <div className="mt-3">
-                                  <p className="text-gray-400 text-sm mb-1">Byte Range</p>
+                                  <p className="text-gray-400 text-sm mb-1">
+                                    Byte Range
+                                  </p>
                                   <p className="text-white font-mono text-xs bg-black/30 p-2 rounded">
-                                    {selectedSegment.byteRange.length} bytes @ offset {selectedSegment.byteRange.offset}
+                                    {selectedSegment.byteRange.length} bytes @
+                                    offset {selectedSegment.byteRange.offset}
                                   </p>
                                 </div>
                               )}
@@ -1402,7 +1550,9 @@ export default function VideoAnalyzePage() {
                                 <Button
                                   size="sm"
                                   className="bg-purple-600 hover:bg-purple-700"
-                                  onClick={() => probeSegment(selectedSegment, true)}
+                                  onClick={() =>
+                                    probeSegment(selectedSegment, true)
+                                  }
                                   disabled={probingSegment}
                                 >
                                   {probingSegment ? (
@@ -1413,7 +1563,11 @@ export default function VideoAnalyzePage() {
                                   ) : (
                                     <>
                                       <Terminal className="h-3 w-3 mr-1" />
-                                      {probeCache[`${selectedSegment.index}-${selectedSegment.uri}`] ? 'Re-analyze with FFprobe' : 'Probe with FFprobe'}
+                                      {probeCache[
+                                        `${selectedSegment.index}-${selectedSegment.uri}`
+                                      ]
+                                        ? 'Re-analyze with FFprobe'
+                                        : 'Probe with FFprobe'}
                                     </>
                                   )}
                                 </Button>
@@ -1423,14 +1577,19 @@ export default function VideoAnalyzePage() {
                                   className="text-purple-300 hover:text-purple-200"
                                   onClick={() => {
                                     // Jump to segment if not already there
-                                    if (currentSegmentIndex !== selectedSegment.index) {
+                                    if (
+                                      currentSegmentIndex !==
+                                      selectedSegment.index
+                                    ) {
                                       jumpToSegment(selectedSegment.index);
                                     }
                                     // Toggle play/pause
                                     togglePlayPause();
                                   }}
                                 >
-                                  {isPlaying && currentSegmentIndex === selectedSegment.index ? (
+                                  {isPlaying &&
+                                  currentSegmentIndex ===
+                                    selectedSegment.index ? (
                                     <>
                                       <Pause className="h-3 w-3 mr-1" />
                                       Pause
@@ -1443,14 +1602,16 @@ export default function VideoAnalyzePage() {
                                   )}
                                 </Button>
                               </div>
-                              
+
                               {/* Analysis Options */}
                               <div className="mt-3 flex items-center gap-4">
                                 <label className="flex items-center gap-2 text-xs text-gray-400 cursor-pointer">
                                   <input
                                     type="checkbox"
                                     checked={detailedAnalysis}
-                                    onChange={(e) => setDetailedAnalysis(e.target.checked)}
+                                    onChange={(e) =>
+                                      setDetailedAnalysis(e.target.checked)
+                                    }
                                     className="w-3 h-3 rounded border-gray-600 bg-gray-700 text-purple-600 focus:ring-purple-500 focus:ring-offset-0"
                                   />
                                   <span>Detailed frame analysis (slower)</span>
@@ -1459,7 +1620,9 @@ export default function VideoAnalyzePage() {
                                   <input
                                     type="checkbox"
                                     checked={autoplayEnabled}
-                                    onChange={(e) => setAutoplayEnabled(e.target.checked)}
+                                    onChange={(e) =>
+                                      setAutoplayEnabled(e.target.checked)
+                                    }
                                     className="w-3 h-3 rounded border-gray-600 bg-gray-700 text-purple-600 focus:ring-purple-500 focus:ring-offset-0"
                                   />
                                   <span>Autoplay on segment select</span>
@@ -1467,7 +1630,7 @@ export default function VideoAnalyzePage() {
                               </div>
                             </div>
                           )}
-                          
+
                           {/* FFprobe Results */}
                           {showProbeResults && (
                             <div className="bg-white/5 rounded-lg p-4 mb-4 border border-purple-500/30">
@@ -1475,40 +1638,57 @@ export default function VideoAnalyzePage() {
                                 <Terminal className="h-4 w-4" />
                                 FFprobe Analysis
                                 {!detailedAnalysis && (
-                                  <span className="text-xs text-gray-400 ml-2">(Basic Mode)</span>
+                                  <span className="text-xs text-gray-400 ml-2">
+                                    (Basic Mode)
+                                  </span>
                                 )}
                               </h4>
-                              
+
                               {probingSegment ? (
                                 <div className="flex items-center justify-center py-8">
                                   <Loader2 className="h-6 w-6 text-purple-400 animate-spin" />
-                                  <span className="ml-2 text-gray-300">Analyzing segment...</span>
+                                  <span className="ml-2 text-gray-300">
+                                    Analyzing segment...
+                                  </span>
                                 </div>
                               ) : probeData ? (
                                 <div className="space-y-4">
                                   {/* HLS Compliance Status */}
                                   <div className="bg-black/30 rounded-lg p-3">
-                                    <h5 className="text-sm font-semibold text-gray-300 mb-2">HLS Compliance</h5>
+                                    <h5 className="text-sm font-semibold text-gray-300 mb-2">
+                                      HLS Compliance
+                                    </h5>
                                     <div className="flex items-center gap-2 mb-2">
                                       {probeData.analysis.hls.compliant ? (
                                         <CheckCircle className="h-4 w-4 text-green-400" />
                                       ) : (
                                         <XCircle className="h-4 w-4 text-red-400" />
                                       )}
-                                      <span className={`text-sm ${probeData.analysis.hls.compliant ? 'text-green-400' : 'text-red-400'}`}>
-                                        {probeData.analysis.hls.compliant ? 'HLS Compliant' : 'HLS Compliance Issues Found'}
+                                      <span
+                                        className={`text-sm ${probeData.analysis.hls.compliant ? 'text-green-400' : 'text-red-400'}`}
+                                      >
+                                        {probeData.analysis.hls.compliant
+                                          ? 'HLS Compliant'
+                                          : 'HLS Compliance Issues Found'}
                                       </span>
                                     </div>
-                                    {probeData.analysis.hls.issues && probeData.analysis.hls.issues.length > 0 && (
-                                      <div className="mt-2">
-                                        {probeData.analysis.hls.issues.map((issue: string, idx: number) => (
-                                          <div key={idx} className="flex items-start gap-1 text-xs text-red-400 mt-1">
-                                            <AlertCircle className="h-3 w-3 mt-0.5 flex-shrink-0" />
-                                            <span>{issue}</span>
-                                          </div>
-                                        ))}
-                                      </div>
-                                    )}
+                                    {probeData.analysis.hls.issues &&
+                                      probeData.analysis.hls.issues.length >
+                                        0 && (
+                                        <div className="mt-2">
+                                          {probeData.analysis.hls.issues.map(
+                                            (issue: string, idx: number) => (
+                                              <div
+                                                key={idx}
+                                                className="flex items-start gap-1 text-xs text-red-400 mt-1"
+                                              >
+                                                <AlertCircle className="h-3 w-3 mt-0.5 flex-shrink-0" />
+                                                <span>{issue}</span>
+                                              </div>
+                                            )
+                                          )}
+                                        </div>
+                                      )}
                                   </div>
 
                                   {/* Format Information */}
@@ -1536,7 +1716,13 @@ export default function VideoAnalyzePage() {
                                             specSection="4.3.3.1"
                                           />
                                         </span>
-                                        <span className="text-white ml-1 font-mono">{probeData.analysis.format.duration.toFixed(3)}s</span>
+                                        <span className="text-white ml-1 font-mono">
+                                          {(
+                                            probeData.analysis.format
+                                              .duration ?? 0
+                                          ).toFixed(3)}
+                                          s
+                                        </span>
                                       </div>
                                       <div>
                                         <span className="text-gray-400 flex items-center gap-1">
@@ -1546,7 +1732,11 @@ export default function VideoAnalyzePage() {
                                             description="The file size of this segment. Affects bandwidth requirements and download time."
                                           />
                                         </span>
-                                        <span className="text-white ml-1 font-mono">{formatBytes(probeData.analysis.format.size)}</span>
+                                        <span className="text-white ml-1 font-mono">
+                                          {formatBytes(
+                                            probeData.analysis.format.size ?? 0
+                                          )}
+                                        </span>
                                       </div>
                                       <div>
                                         <span className="text-gray-400 flex items-center gap-1">
@@ -1558,143 +1748,213 @@ export default function VideoAnalyzePage() {
                                             specSection="4.3.4.2"
                                           />
                                         </span>
-                                        <span className="text-white ml-1 font-mono">{probeData.analysis.format.bitRate > 0 ? (probeData.analysis.format.bitRate / 1000).toFixed(0) + ' kbps' : 'N/A'}</span>
+                                        <span className="text-white ml-1 font-mono">
+                                          {(probeData.analysis.format
+                                            .bit_rate ?? 0) > 0
+                                            ? (
+                                                (probeData.analysis.format
+                                                  .bit_rate ?? 0) / 1000
+                                              ).toFixed(0) + ' kbps'
+                                            : 'N/A'}
+                                        </span>
                                       </div>
                                       <div>
-                                        <span className="text-gray-400">Format:</span>
-                                        <span className="text-white ml-1 font-mono">{probeData.analysis.format.formatName || 'Unknown'}</span>
+                                        <span className="text-gray-400">
+                                          Format:
+                                        </span>
+                                        <span className="text-white ml-1 font-mono">
+                                          {probeData.analysis.format
+                                            .format_name ?? 'Unknown'}
+                                        </span>
                                       </div>
                                     </div>
                                   </div>
 
                                   {/* Video Stream Information */}
-                                  {probeData.analysis.video && Object.keys(probeData.analysis.video).length > 0 && (
-                                    <div className="bg-black/30 rounded-lg p-3">
-                                      <h5 className="text-sm font-semibold text-gray-300 mb-2 flex items-center gap-1">
-                                        <Film className="h-3 w-3" />
-                                        Video Stream
-                                      </h5>
-                                      <div className="grid grid-cols-2 gap-2 text-xs">
-                                        <div>
-                                          <span className="text-gray-400 flex items-center gap-1">
-                                            Codec:
-                                            <InfoPopover
-                                              title="Video Codec"
-                                              description="The video compression format. HLS supports H.264 (AVC) for broad compatibility and H.265 (HEVC) for better efficiency."
-                                              specLink="https://datatracker.ietf.org/doc/html/rfc8216#section-4.3.4.2"
-                                              specSection="4.3.4.2"
-                                            />
-                                          </span>
-                                          <span className="text-white ml-1 font-mono">{probeData.analysis.video.codecName} ({probeData.analysis.video.profile})</span>
-                                        </div>
-                                        <div>
-                                          <span className="text-gray-400 flex items-center gap-1">
-                                            Resolution:
-                                            <InfoPopover
-                                              title="Video Resolution"
-                                              description="The video dimensions in pixels (width × height). Higher resolutions provide better quality but require more bandwidth."
-                                            />
-                                          </span>
-                                          <span className="text-white ml-1 font-mono">{probeData.analysis.video.width}x{probeData.analysis.video.height}</span>
-                                        </div>
-                                        <div>
-                                          <span className="text-gray-400 flex items-center gap-1">
-                                            Frame Rate:
-                                            <InfoPopover
-                                              title="Frame Rate"
-                                              description="Frames per second. Common values are 24, 25, 30, or 60 fps. Higher rates provide smoother motion."
-                                            />
-                                          </span>
-                                          <span className="text-white ml-1 font-mono">{probeData.analysis.video.avgFrameRate}</span>
-                                        </div>
-                                        <div>
-                                          <span className="text-gray-400 flex items-center gap-1">
-                                            Pixel Format:
-                                            <InfoPopover
-                                              title="Pixel Format"
-                                              description="The color encoding format. YUV420P is standard for video compression, providing good quality with efficient storage."
-                                            />
-                                          </span>
-                                          <span className="text-white ml-1 font-mono">{probeData.analysis.video.pixFmt}</span>
-                                        </div>
-                                        <div>
-                                          <span className="text-gray-400 flex items-center gap-1">
-                                            Level:
-                                            <InfoPopover
-                                              title="Codec Level"
-                                              description="The H.264/H.265 level defines maximum bitrate and resolution. Higher levels support larger resolutions but may have compatibility issues."
-                                              specLink="https://www.itu.int/rec/T-REC-H.264"
-                                            />
-                                          </span>
-                                          <span className="text-white ml-1 font-mono">{probeData.analysis.video.level}</span>
-                                        </div>
-                                        <div>
-                                          <span className="text-gray-400 flex items-center gap-1">
-                                            Ref Frames:
-                                            <InfoPopover
-                                              title="Reference Frames"
-                                              description="Number of previous frames used for compression. More reference frames improve quality but increase decoder complexity."
-                                            />
-                                          </span>
-                                          <span className="text-white ml-1 font-mono">{probeData.analysis.video.refs}</span>
+                                  {probeData.analysis.video &&
+                                    Object.keys(probeData.analysis.video)
+                                      .length > 0 && (
+                                      <div className="bg-black/30 rounded-lg p-3">
+                                        <h5 className="text-sm font-semibold text-gray-300 mb-2 flex items-center gap-1">
+                                          <Film className="h-3 w-3" />
+                                          Video Stream
+                                        </h5>
+                                        <div className="grid grid-cols-2 gap-2 text-xs">
+                                          <div>
+                                            <span className="text-gray-400 flex items-center gap-1">
+                                              Codec:
+                                              <InfoPopover
+                                                title="Video Codec"
+                                                description="The video compression format. HLS supports H.264 (AVC) for broad compatibility and H.265 (HEVC) for better efficiency."
+                                                specLink="https://datatracker.ietf.org/doc/html/rfc8216#section-4.3.4.2"
+                                                specSection="4.3.4.2"
+                                              />
+                                            </span>
+                                            <span className="text-white ml-1 font-mono">
+                                              {
+                                                probeData.analysis.video
+                                                  .codec_name
+                                              }{' '}
+                                              (
+                                              {probeData.analysis.video.profile}
+                                              )
+                                            </span>
+                                          </div>
+                                          <div>
+                                            <span className="text-gray-400 flex items-center gap-1">
+                                              Resolution:
+                                              <InfoPopover
+                                                title="Video Resolution"
+                                                description="The video dimensions in pixels (width × height). Higher resolutions provide better quality but require more bandwidth."
+                                              />
+                                            </span>
+                                            <span className="text-white ml-1 font-mono">
+                                              {probeData.analysis.video.width}x
+                                              {probeData.analysis.video.height}
+                                            </span>
+                                          </div>
+                                          <div>
+                                            <span className="text-gray-400 flex items-center gap-1">
+                                              Frame Rate:
+                                              <InfoPopover
+                                                title="Frame Rate"
+                                                description="Frames per second. Common values are 24, 25, 30, or 60 fps. Higher rates provide smoother motion."
+                                              />
+                                            </span>
+                                            <span className="text-white ml-1 font-mono">
+                                              {
+                                                probeData.analysis.video
+                                                  .avg_frame_rate
+                                              }
+                                            </span>
+                                          </div>
+                                          <div>
+                                            <span className="text-gray-400 flex items-center gap-1">
+                                              Pixel Format:
+                                              <InfoPopover
+                                                title="Pixel Format"
+                                                description="The color encoding format. YUV420P is standard for video compression, providing good quality with efficient storage."
+                                              />
+                                            </span>
+                                            <span className="text-white ml-1 font-mono">
+                                              {probeData.analysis.video.pix_fmt}
+                                            </span>
+                                          </div>
+                                          <div>
+                                            <span className="text-gray-400 flex items-center gap-1">
+                                              Level:
+                                              <InfoPopover
+                                                title="Codec Level"
+                                                description="The H.264/H.265 level defines maximum bitrate and resolution. Higher levels support larger resolutions but may have compatibility issues."
+                                                specLink="https://www.itu.int/rec/T-REC-H.264"
+                                              />
+                                            </span>
+                                            <span className="text-white ml-1 font-mono">
+                                              {probeData.analysis.video.level}
+                                            </span>
+                                          </div>
+                                          <div>
+                                            <span className="text-gray-400 flex items-center gap-1">
+                                              Ref Frames:
+                                              <InfoPopover
+                                                title="Reference Frames"
+                                                description="Number of previous frames used for compression. More reference frames improve quality but increase decoder complexity."
+                                              />
+                                            </span>
+                                            <span className="text-white ml-1 font-mono">
+                                              {probeData.analysis.video.refs}
+                                            </span>
+                                          </div>
                                         </div>
                                       </div>
-                                    </div>
-                                  )}
+                                    )}
 
                                   {/* Audio Stream Information */}
-                                  {probeData.analysis.audio && Object.keys(probeData.analysis.audio).length > 0 && (
-                                    <div className="bg-black/30 rounded-lg p-3">
-                                      <h5 className="text-sm font-semibold text-gray-300 mb-2 flex items-center gap-1">
-                                        <Music className="h-3 w-3" />
-                                        Audio Stream
-                                      </h5>
-                                      <div className="grid grid-cols-2 gap-2 text-xs">
-                                        <div>
-                                          <span className="text-gray-400 flex items-center gap-1">
-                                            Codec:
-                                            <InfoPopover
-                                              title="Audio Codec"
-                                              description="The audio compression format. AAC is most common for HLS, with MP3, AC-3, and E-AC-3 also supported."
-                                              specLink="https://datatracker.ietf.org/doc/html/rfc8216#section-4.3.4.2"
-                                              specSection="4.3.4.2"
-                                            />
-                                          </span>
-                                          <span className="text-white ml-1 font-mono">{probeData.analysis.audio.codecName}</span>
-                                        </div>
-                                        <div>
-                                          <span className="text-gray-400 flex items-center gap-1">
-                                            Sample Rate:
-                                            <InfoPopover
-                                              title="Sample Rate"
-                                              description="Audio samples per second. 48000 Hz is standard for video, 44100 Hz for music. Higher rates capture more audio detail."
-                                            />
-                                          </span>
-                                          <span className="text-white ml-1 font-mono">{probeData.analysis.audio.sampleRate} Hz</span>
-                                        </div>
-                                        <div>
-                                          <span className="text-gray-400 flex items-center gap-1">
-                                            Channels:
-                                            <InfoPopover
-                                              title="Audio Channels"
-                                              description="Number and layout of audio channels. Stereo (2 channels) is most common, with 5.1 surround supported for premium content."
-                                            />
-                                          </span>
-                                          <span className="text-white ml-1 font-mono">{probeData.analysis.audio.channels} ({probeData.analysis.audio.channelLayout})</span>
-                                        </div>
-                                        <div>
-                                          <span className="text-gray-400 flex items-center gap-1">
-                                            Bitrate:
-                                            <InfoPopover
-                                              title="Audio Bitrate"
-                                              description="The amount of data used per second for audio. Higher bitrates provide better quality. 128-192 kbps is typical for stereo AAC."
-                                            />
-                                          </span>
-                                          <span className="text-white ml-1 font-mono">{probeData.analysis.audio.bitRate ? (probeData.analysis.audio.bitRate / 1000).toFixed(0) + ' kbps' : 'N/A'}</span>
+                                  {probeData.analysis.audio &&
+                                    Object.keys(probeData.analysis.audio)
+                                      .length > 0 && (
+                                      <div className="bg-black/30 rounded-lg p-3">
+                                        <h5 className="text-sm font-semibold text-gray-300 mb-2 flex items-center gap-1">
+                                          <Music className="h-3 w-3" />
+                                          Audio Stream
+                                        </h5>
+                                        <div className="grid grid-cols-2 gap-2 text-xs">
+                                          <div>
+                                            <span className="text-gray-400 flex items-center gap-1">
+                                              Codec:
+                                              <InfoPopover
+                                                title="Audio Codec"
+                                                description="The audio compression format. AAC is most common for HLS, with MP3, AC-3, and E-AC-3 also supported."
+                                                specLink="https://datatracker.ietf.org/doc/html/rfc8216#section-4.3.4.2"
+                                                specSection="4.3.4.2"
+                                              />
+                                            </span>
+                                            <span className="text-white ml-1 font-mono">
+                                              {
+                                                probeData.analysis.audio
+                                                  .codec_name
+                                              }
+                                            </span>
+                                          </div>
+                                          <div>
+                                            <span className="text-gray-400 flex items-center gap-1">
+                                              Sample Rate:
+                                              <InfoPopover
+                                                title="Sample Rate"
+                                                description="Audio samples per second. 48000 Hz is standard for video, 44100 Hz for music. Higher rates capture more audio detail."
+                                              />
+                                            </span>
+                                            <span className="text-white ml-1 font-mono">
+                                              {
+                                                probeData.analysis.audio
+                                                  .sample_rate
+                                              }{' '}
+                                              Hz
+                                            </span>
+                                          </div>
+                                          <div>
+                                            <span className="text-gray-400 flex items-center gap-1">
+                                              Channels:
+                                              <InfoPopover
+                                                title="Audio Channels"
+                                                description="Number and layout of audio channels. Stereo (2 channels) is most common, with 5.1 surround supported for premium content."
+                                              />
+                                            </span>
+                                            <span className="text-white ml-1 font-mono">
+                                              {
+                                                probeData.analysis.audio
+                                                  .channels
+                                              }{' '}
+                                              (
+                                              {
+                                                probeData.analysis.audio
+                                                  .channel_layout
+                                              }
+                                              )
+                                            </span>
+                                          </div>
+                                          <div>
+                                            <span className="text-gray-400 flex items-center gap-1">
+                                              Bitrate:
+                                              <InfoPopover
+                                                title="Audio Bitrate"
+                                                description="The amount of data used per second for audio. Higher bitrates provide better quality. 128-192 kbps is typical for stereo AAC."
+                                              />
+                                            </span>
+                                            <span className="text-white ml-1 font-mono">
+                                              {probeData.analysis.audio.bit_rate
+                                                ? (
+                                                    Number(
+                                                      probeData.analysis.audio
+                                                        .bit_rate
+                                                    ) / 1000
+                                                  ).toFixed(0) + ' kbps'
+                                                : 'N/A'}
+                                            </span>
+                                          </div>
                                         </div>
                                       </div>
-                                    </div>
-                                  )}
+                                    )}
 
                                   {/* Packet/Frame Analysis */}
                                   <div className="bg-black/30 rounded-lg p-3">
@@ -1705,45 +1965,85 @@ export default function VideoAnalyzePage() {
                                     {probeData.analysis.frames?.estimated ? (
                                       <div className="text-xs space-y-1">
                                         <div className="flex justify-between">
-                                          <span className="text-gray-400">Video Frames:</span>
-                                          <span className="text-white font-mono">{probeData.analysis.frames.video}</span>
+                                          <span className="text-gray-400">
+                                            Video Frames:
+                                          </span>
+                                          <span className="text-white font-mono">
+                                            {probeData.analysis.frames.video}
+                                          </span>
                                         </div>
-                                        <p className="text-yellow-300 text-xs italic mt-2">{probeData.analysis.frames.note}</p>
-                                        <p className="text-gray-500 text-xs">Enable "Detailed frame analysis" for complete frame/packet information</p>
+                                        <p className="text-yellow-300 text-xs italic mt-2">
+                                          {probeData.analysis.frames.note}
+                                        </p>
+                                        <p className="text-gray-500 text-xs">
+                                          Enable &quot;Detailed frame
+                                          analysis&quot; for complete
+                                          frame/packet information
+                                        </p>
                                       </div>
                                     ) : (
                                       <div className="space-y-2">
                                         <div className="grid grid-cols-2 gap-2 text-xs">
                                           <div>
-                                            <span className="text-gray-400">Total Frames:</span>
-                                            <span className="text-white ml-1 font-mono">{probeData.analysis.frames?.total || 'N/A'}</span>
-                                          </div>
-                                          <div>
-                                            <span className="text-gray-400">Video Frames:</span>
-                                            <span className="text-white ml-1 font-mono">{probeData.analysis.frames?.video || 'N/A'}</span>
-                                          </div>
-                                          <div>
-                                            <span className="text-gray-400">Keyframes:</span>
-                                            <span className="text-white ml-1 font-mono">{probeData.analysis.frames?.keyFrames || 'N/A'}</span>
-                                          </div>
-                                          <div>
-                                            <span className="text-gray-400">Avg Keyframe Interval:</span>
+                                            <span className="text-gray-400">
+                                              Total Frames:
+                                            </span>
                                             <span className="text-white ml-1 font-mono">
-                                              {probeData.analysis.frames?.avgKeyFrameInterval 
-                                                ? (probeData.analysis.frames.avgKeyFrameInterval / 1000000).toFixed(2) + 's' 
+                                              {probeData.analysis.frames
+                                                ?.total ?? 'N/A'}
+                                            </span>
+                                          </div>
+                                          <div>
+                                            <span className="text-gray-400">
+                                              Video Frames:
+                                            </span>
+                                            <span className="text-white ml-1 font-mono">
+                                              {probeData.analysis.frames
+                                                ?.video ?? 'N/A'}
+                                            </span>
+                                          </div>
+                                          <div>
+                                            <span className="text-gray-400">
+                                              Keyframes:
+                                            </span>
+                                            <span className="text-white ml-1 font-mono">
+                                              {probeData.analysis.frames
+                                                ?.keyFrames ?? 'N/A'}
+                                            </span>
+                                          </div>
+                                          <div>
+                                            <span className="text-gray-400">
+                                              Avg Keyframe Interval:
+                                            </span>
+                                            <span className="text-white ml-1 font-mono">
+                                              {probeData.analysis.frames
+                                                ?.avgKeyFrameInterval
+                                                ? (
+                                                    probeData.analysis.frames
+                                                      .avgKeyFrameInterval /
+                                                    1000000
+                                                  ).toFixed(2) + 's'
                                                 : 'N/A'}
                                             </span>
                                           </div>
                                         </div>
-                                        {probeData.analysis.frames?.keyFramePositions && (
+                                        {probeData.analysis.frames
+                                          ?.keyFramePositions && (
                                           <div className="mt-2">
-                                            <span className="text-gray-400 text-xs">Keyframe Positions:</span>
+                                            <span className="text-gray-400 text-xs">
+                                              Keyframe Positions:
+                                            </span>
                                             <div className="text-white font-mono text-xs mt-1 grid grid-cols-3 gap-1">
-                                              {probeData.analysis.frames.keyFramePositions.slice(0, 6).map((kf: any, idx: number) => (
-                                                <span key={idx} className="bg-black/50 px-1 py-0.5 rounded">
-                                                  {kf.pts_time}s
-                                                </span>
-                                              ))}
+                                              {probeData.analysis.frames.keyFramePositions
+                                                .slice(0, 6)
+                                                .map((kf: any, idx: number) => (
+                                                  <span
+                                                    key={idx}
+                                                    className="bg-black/50 px-1 py-0.5 rounded"
+                                                  >
+                                                    {kf.pts_time}s
+                                                  </span>
+                                                ))}
                                             </div>
                                           </div>
                                         )}
@@ -1752,47 +2052,70 @@ export default function VideoAnalyzePage() {
                                   </div>
 
                                   {/* Recommendations */}
-                                  {probeData.analysis.hls.recommendations.length > 0 && (
+                                  {probeData.analysis.hls.recommendations
+                                    .length > 0 && (
                                     <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-lg p-3">
                                       <h5 className="text-sm font-semibold text-yellow-300 mb-2 flex items-center gap-1">
                                         <AlertCircle className="h-3 w-3" />
                                         Recommendations
                                       </h5>
                                       <ul className="space-y-1">
-                                        {probeData.analysis.hls.recommendations.map((rec, idx) => (
-                                          <li key={idx} className="text-xs text-yellow-200 flex items-start gap-1">
-                                            <span className="text-yellow-400">•</span>
-                                            <span>{rec}</span>
-                                          </li>
-                                        ))}
+                                        {probeData.analysis.hls.recommendations.map(
+                                          (rec, idx) => (
+                                            <li
+                                              key={idx}
+                                              className="text-xs text-yellow-200 flex items-start gap-1"
+                                            >
+                                              <span className="text-yellow-400">
+                                                •
+                                              </span>
+                                              <span>{rec}</span>
+                                            </li>
+                                          )
+                                        )}
                                       </ul>
                                     </div>
                                   )}
 
                                   {/* HLS Spec References */}
-                                  {probeData.analysis.hls.specs && probeData.analysis.hls.specs.length > 0 && (
-                                    <div className="bg-blue-500/10 border border-blue-500/30 rounded-lg p-3">
-                                      <h5 className="text-sm font-semibold text-blue-300 mb-2 flex items-center gap-1">
-                                        <BookOpen className="h-3 w-3" />
-                                        HLS Specification References
-                                      </h5>
-                                      <div className="space-y-1">
-                                        {probeData.analysis.hls.specs.map((ref: any, idx: number) => (
-                                          <div key={idx} className="text-xs">
-                                            <Link 
-                                              href={ref.url} 
-                                              target="_blank"
-                                              className="text-blue-300 hover:text-blue-200 flex items-start gap-1"
-                                            >
-                                              <span className="text-blue-400">§{ref.section}</span>
-                                              <span>{ref.description}</span>
-                                              <ExternalLink className="h-2 w-2 flex-shrink-0 mt-0.5" />
-                                            </Link>
-                                          </div>
-                                        ))}
+                                  {probeData.analysis.hls.specs &&
+                                    probeData.analysis.hls.specs.length > 0 && (
+                                      <div className="bg-blue-500/10 border border-blue-500/30 rounded-lg p-3">
+                                        <h5 className="text-sm font-semibold text-blue-300 mb-2 flex items-center gap-1">
+                                          <BookOpen className="h-3 w-3" />
+                                          HLS Specification References
+                                        </h5>
+                                        <div className="space-y-1">
+                                          {probeData.analysis.hls.specs.map(
+                                            (
+                                              ref: {
+                                                section: string;
+                                                description: string;
+                                                url: string;
+                                              },
+                                              idx: number
+                                            ) => (
+                                              <div
+                                                key={idx}
+                                                className="text-xs"
+                                              >
+                                                <Link
+                                                  href={ref.url}
+                                                  target="_blank"
+                                                  className="text-blue-300 hover:text-blue-200 flex items-start gap-1"
+                                                >
+                                                  <span className="text-blue-400">
+                                                    §{ref.section}
+                                                  </span>
+                                                  <span>{ref.description}</span>
+                                                  <ExternalLink className="h-2 w-2 flex-shrink-0 mt-0.5" />
+                                                </Link>
+                                              </div>
+                                            )
+                                          )}
+                                        </div>
                                       </div>
-                                    </div>
-                                  )}
+                                    )}
 
                                   {/* Raw Data Toggle */}
                                   <details className="bg-black/30 rounded-lg p-3">
@@ -1806,12 +2129,15 @@ export default function VideoAnalyzePage() {
                                 </div>
                               ) : (
                                 <div className="text-center text-gray-400 py-4">
-                                  <p className="text-sm">Select a segment and click "Probe with FFprobe" to analyze</p>
+                                  <p className="text-sm">
+                                    Select a segment and click &quot;Probe with
+                                    FFprobe&quot; to analyze
+                                  </p>
                                 </div>
                               )}
                             </div>
                           )}
-                          
+
                           {/* Batch Analysis Results */}
                           {showBatchResults && batchProbeData && (
                             <div className="bg-white/5 rounded-lg p-4 mb-4 border border-purple-500/30 mt-4">
@@ -1819,88 +2145,177 @@ export default function VideoAnalyzePage() {
                                 <BarChart3 className="h-4 w-4" />
                                 Stream Analysis Report
                               </h4>
-                              
+
                               {probingBatch ? (
                                 <div className="flex items-center justify-center py-8">
                                   <Loader2 className="h-6 w-6 text-purple-400 animate-spin" />
-                                  <span className="ml-2 text-gray-300">Analyzing {parsedManifest.segments.length} segments...</span>
+                                  <span className="ml-2 text-gray-300">
+                                    Analyzing {parsedManifest.segments.length}{' '}
+                                    segments...
+                                  </span>
                                 </div>
                               ) : batchProbeData.aggregateAnalysis ? (
                                 <div className="space-y-4">
                                   {/* Overview Stats */}
                                   <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                                     <div className="bg-black/30 rounded-lg p-3">
-                                      <p className="text-xs text-gray-400">Total Segments</p>
-                                      <p className="text-lg font-mono text-white">{batchProbeData.aggregateAnalysis.totalSegments}</p>
+                                      <p className="text-xs text-gray-400">
+                                        Total Segments
+                                      </p>
+                                      <p className="text-lg font-mono text-white">
+                                        {
+                                          batchProbeData.aggregateAnalysis
+                                            .totalSegments
+                                        }
+                                      </p>
                                     </div>
                                     <div className="bg-black/30 rounded-lg p-3">
-                                      <p className="text-xs text-gray-400">Avg Duration</p>
-                                      <p className="text-lg font-mono text-white">{batchProbeData.aggregateAnalysis.averages.duration.toFixed(2)}s</p>
+                                      <p className="text-xs text-gray-400">
+                                        Avg Duration
+                                      </p>
+                                      <p className="text-lg font-mono text-white">
+                                        {batchProbeData.aggregateAnalysis.averages.duration.toFixed(
+                                          2
+                                        )}
+                                        s
+                                      </p>
                                     </div>
                                     <div className="bg-black/30 rounded-lg p-3">
-                                      <p className="text-xs text-gray-400">Avg Bitrate</p>
-                                      <p className="text-lg font-mono text-white">{(batchProbeData.aggregateAnalysis.averages.bitrate / 1000000).toFixed(2)} Mbps</p>
+                                      <p className="text-xs text-gray-400">
+                                        Avg Bitrate
+                                      </p>
+                                      <p className="text-lg font-mono text-white">
+                                        {(
+                                          batchProbeData.aggregateAnalysis
+                                            .averages.bitrate / 1000000
+                                        ).toFixed(2)}{' '}
+                                        Mbps
+                                      </p>
                                     </div>
                                     <div className="bg-black/30 rounded-lg p-3">
-                                      <p className="text-xs text-gray-400">Total Issues</p>
-                                      <p className="text-lg font-mono text-white">{batchProbeData.aggregateAnalysis.issues.total}</p>
+                                      <p className="text-xs text-gray-400">
+                                        Total Issues
+                                      </p>
+                                      <p className="text-lg font-mono text-white">
+                                        {
+                                          batchProbeData.aggregateAnalysis
+                                            .issues.total
+                                        }
+                                      </p>
                                     </div>
                                   </div>
 
                                   {/* Consistency Analysis */}
                                   <div className="bg-black/30 rounded-lg p-3">
-                                    <h5 className="text-sm font-semibold text-gray-300 mb-2">Consistency Analysis</h5>
+                                    <h5 className="text-sm font-semibold text-gray-300 mb-2">
+                                      Consistency Analysis
+                                    </h5>
                                     <div className="space-y-2">
                                       <div className="flex items-center justify-between text-xs">
-                                        <span className="text-gray-400">Duration Consistency</span>
+                                        <span className="text-gray-400">
+                                          Duration Consistency
+                                        </span>
                                         <div className="flex items-center gap-2">
-                                          {batchProbeData.aggregateAnalysis.consistency.duration.consistent ? (
+                                          {batchProbeData.aggregateAnalysis
+                                            .consistency.duration.consistent ? (
                                             <CheckCircle className="h-3 w-3 text-green-400" />
                                           ) : (
                                             <XCircle className="h-3 w-3 text-red-400" />
                                           )}
                                           <span className="text-white font-mono">
-                                            {batchProbeData.aggregateAnalysis.consistency.duration.min.toFixed(2)}s - {batchProbeData.aggregateAnalysis.consistency.duration.max.toFixed(2)}s
+                                            {batchProbeData.aggregateAnalysis.consistency.duration.min.toFixed(
+                                              2
+                                            )}
+                                            s -{' '}
+                                            {batchProbeData.aggregateAnalysis.consistency.duration.max.toFixed(
+                                              2
+                                            )}
+                                            s
                                           </span>
                                         </div>
                                       </div>
                                       <div className="flex items-center justify-between text-xs">
-                                        <span className="text-gray-400">Bitrate Consistency</span>
+                                        <span className="text-gray-400">
+                                          Bitrate Consistency
+                                        </span>
                                         <div className="flex items-center gap-2">
-                                          {batchProbeData.aggregateAnalysis.consistency.bitrate.consistent ? (
+                                          {batchProbeData.aggregateAnalysis
+                                            .consistency.bitrate.consistent ? (
                                             <CheckCircle className="h-3 w-3 text-green-400" />
                                           ) : (
                                             <XCircle className="h-3 w-3 text-red-400" />
                                           )}
                                           <span className="text-white font-mono">
-                                            {(batchProbeData.aggregateAnalysis.consistency.bitrate.min / 1000000).toFixed(1)} - {(batchProbeData.aggregateAnalysis.consistency.bitrate.max / 1000000).toFixed(1)} Mbps
+                                            {(
+                                              batchProbeData.aggregateAnalysis
+                                                .consistency.bitrate.min /
+                                              1000000
+                                            ).toFixed(1)}{' '}
+                                            -{' '}
+                                            {(
+                                              batchProbeData.aggregateAnalysis
+                                                .consistency.bitrate.max /
+                                              1000000
+                                            ).toFixed(1)}{' '}
+                                            Mbps
                                           </span>
                                         </div>
                                       </div>
                                       <div className="flex items-center justify-between text-xs">
-                                        <span className="text-gray-400">Resolutions</span>
-                                        <span className="text-white font-mono">{batchProbeData.aggregateAnalysis.consistency.resolution.join(', ') || 'N/A'}</span>
+                                        <span className="text-gray-400">
+                                          Resolutions
+                                        </span>
+                                        <span className="text-white font-mono">
+                                          {batchProbeData.aggregateAnalysis.consistency.resolution.join(
+                                            ', '
+                                          ) || 'N/A'}
+                                        </span>
                                       </div>
                                       <div className="flex items-center justify-between text-xs">
-                                        <span className="text-gray-400">Video Codecs</span>
-                                        <span className="text-white font-mono">{batchProbeData.aggregateAnalysis.consistency.codecs.video.join(', ') || 'N/A'}</span>
+                                        <span className="text-gray-400">
+                                          Video Codecs
+                                        </span>
+                                        <span className="text-white font-mono">
+                                          {batchProbeData.aggregateAnalysis.consistency.codecs.video.join(
+                                            ', '
+                                          ) || 'N/A'}
+                                        </span>
                                       </div>
                                       <div className="flex items-center justify-between text-xs">
-                                        <span className="text-gray-400">Audio Codecs</span>
-                                        <span className="text-white font-mono">{batchProbeData.aggregateAnalysis.consistency.codecs.audio.join(', ') || 'N/A'}</span>
+                                        <span className="text-gray-400">
+                                          Audio Codecs
+                                        </span>
+                                        <span className="text-white font-mono">
+                                          {batchProbeData.aggregateAnalysis.consistency.codecs.audio.join(
+                                            ', '
+                                          ) || 'N/A'}
+                                        </span>
                                       </div>
                                     </div>
                                   </div>
 
                                   {/* Issues Breakdown */}
-                                  {batchProbeData.aggregateAnalysis.issues.total > 0 && (
+                                  {batchProbeData.aggregateAnalysis.issues
+                                    .total > 0 && (
                                     <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-3">
-                                      <h5 className="text-sm font-semibold text-red-300 mb-2">Issues Found</h5>
+                                      <h5 className="text-sm font-semibold text-red-300 mb-2">
+                                        Issues Found
+                                      </h5>
                                       <div className="space-y-1">
-                                        {Object.entries(batchProbeData.aggregateAnalysis.issues.byType).map(([type, count]) => (
-                                          <div key={type} className="flex items-center justify-between text-xs">
-                                            <span className="text-red-200">{type}</span>
-                                            <span className="text-red-300 font-mono">{count} segments</span>
+                                        {Object.entries(
+                                          batchProbeData.aggregateAnalysis
+                                            .issues.byType
+                                        ).map(([type, count]) => (
+                                          <div
+                                            key={type}
+                                            className="flex items-center justify-between text-xs"
+                                          >
+                                            <span className="text-red-200">
+                                              {type}
+                                            </span>
+                                            <span className="text-red-300 font-mono">
+                                              {count} segments
+                                            </span>
                                           </div>
                                         ))}
                                       </div>
@@ -1908,30 +2323,50 @@ export default function VideoAnalyzePage() {
                                   )}
 
                                   {/* Aggregate Recommendations */}
-                                  {batchProbeData.aggregateAnalysis.recommendations.length > 0 && (
+                                  {batchProbeData.aggregateAnalysis
+                                    .recommendations.length > 0 && (
                                     <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-lg p-3">
-                                      <h5 className="text-sm font-semibold text-yellow-300 mb-2">Stream-wide Recommendations</h5>
+                                      <h5 className="text-sm font-semibold text-yellow-300 mb-2">
+                                        Stream-wide Recommendations
+                                      </h5>
                                       <ul className="space-y-1">
-                                        {batchProbeData.aggregateAnalysis.recommendations.map((rec, idx) => (
-                                          <li key={idx} className="text-xs text-yellow-200 flex items-start gap-1">
-                                            <span className="text-yellow-400">•</span>
-                                            <span>{rec}</span>
-                                          </li>
-                                        ))}
+                                        {batchProbeData.aggregateAnalysis.recommendations.map(
+                                          (rec, idx) => (
+                                            <li
+                                              key={idx}
+                                              className="text-xs text-yellow-200 flex items-start gap-1"
+                                            >
+                                              <span className="text-yellow-400">
+                                                •
+                                              </span>
+                                              <span>{rec}</span>
+                                            </li>
+                                          )
+                                        )}
                                       </ul>
                                     </div>
                                   )}
 
                                   {/* Failed Segments */}
-                                  {batchProbeData.results.some(r => !r.success) && (
+                                  {batchProbeData.results.some(
+                                    (r) => !r.success
+                                  ) && (
                                     <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-3">
-                                      <h5 className="text-sm font-semibold text-red-300 mb-2">Failed Segments</h5>
+                                      <h5 className="text-sm font-semibold text-red-300 mb-2">
+                                        Failed Segments
+                                      </h5>
                                       <div className="space-y-1">
                                         {batchProbeData.results
-                                          .filter(r => !r.success)
+                                          .filter((r) => !r.success)
                                           .map((result, idx) => (
-                                            <div key={idx} className="text-xs text-red-200">
-                                              <span className="font-mono">{result.url.split('/').pop()}</span>: {result.error}
+                                            <div
+                                              key={idx}
+                                              className="text-xs text-red-200"
+                                            >
+                                              <span className="font-mono">
+                                                {result.url.split('/').pop()}
+                                              </span>
+                                              : {result.error}
                                             </div>
                                           ))}
                                       </div>
@@ -1941,17 +2376,22 @@ export default function VideoAnalyzePage() {
                               ) : null}
                             </div>
                           )}
-                          
+
                           {/* Segment List */}
                           <div className="bg-black/30 rounded-lg p-4 max-h-64 overflow-y-auto">
                             <div className="space-y-1">
                               {parsedManifest.segments.map((segment, idx) => {
-                                const isAnalyzed = !!probeCache[`${segment.index}-${segment.uri}`];
+                                const isAnalyzed =
+                                  !!probeCache[
+                                    `${segment.index}-${segment.uri}`
+                                  ];
                                 return (
                                   <div
                                     key={segment.index}
                                     className={`flex items-center gap-3 text-sm hover:bg-white/5 p-2 rounded cursor-pointer transition-colors ${
-                                      currentSegmentIndex === idx ? 'bg-purple-600/20 border-l-2 border-purple-500' : ''
+                                      currentSegmentIndex === idx
+                                        ? 'bg-purple-600/20 border-l-2 border-purple-500'
+                                        : ''
                                     }`}
                                     onClick={() => {
                                       setSelectedSegment(segment);
@@ -1959,7 +2399,9 @@ export default function VideoAnalyzePage() {
                                     }}
                                     title="Click to jump to this segment"
                                   >
-                                    <span className={`w-12 ${currentSegmentIndex === idx ? 'text-purple-300 font-bold' : 'text-gray-500'}`}>
+                                    <span
+                                      className={`w-12 ${currentSegmentIndex === idx ? 'text-purple-300 font-bold' : 'text-gray-500'}`}
+                                    >
                                       #{segment.index}
                                     </span>
                                     {isAnalyzed && (
@@ -1986,9 +2428,13 @@ export default function VideoAnalyzePage() {
                           {/* Analysis Progress Indicator */}
                           {Object.keys(probeCache).length > 0 && (
                             <div className="mt-2 text-xs text-gray-400">
-                              Analyzed {Object.keys(probeCache).length} of {parsedManifest.segments.length} segments
-                              {Object.keys(probeCache).length === parsedManifest.segments.length && (
-                                <span className="text-green-400 ml-2">✓ All segments analyzed</span>
+                              Analyzed {Object.keys(probeCache).length} of{' '}
+                              {parsedManifest.segments.length} segments
+                              {Object.keys(probeCache).length ===
+                                parsedManifest.segments.length && (
+                                <span className="text-green-400 ml-2">
+                                  ✓ All segments analyzed
+                                </span>
                               )}
                             </div>
                           )}
@@ -2001,19 +2447,26 @@ export default function VideoAnalyzePage() {
                   <div className="space-y-4">
                     <div className="bg-yellow-500/20 border border-yellow-500/30 rounded-lg p-4">
                       <p className="text-yellow-300 text-sm">
-                        This is a direct video file, not an HLS stream. No manifest analysis available.
+                        This is a direct video file, not an HLS stream. No
+                        manifest analysis available.
                       </p>
                     </div>
                     <div className="bg-white/5 rounded-lg p-4">
-                      <h3 className="text-white font-semibold mb-2">Video Information</h3>
+                      <h3 className="text-white font-semibold mb-2">
+                        Video Information
+                      </h3>
                       <div className="space-y-2 text-sm">
                         <div>
                           <span className="text-gray-400">Type:</span>
-                          <span className="text-white ml-2">Original Video File</span>
+                          <span className="text-white ml-2">
+                            Original Video File
+                          </span>
                         </div>
                         <div>
                           <span className="text-gray-400">URL:</span>
-                          <span className="text-white ml-2 font-mono text-xs break-all">{selectedManifest}</span>
+                          <span className="text-white ml-2 font-mono text-xs break-all">
+                            {selectedManifest}
+                          </span>
                         </div>
                       </div>
                     </div>

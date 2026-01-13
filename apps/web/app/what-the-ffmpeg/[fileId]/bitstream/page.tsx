@@ -24,6 +24,7 @@ import { BinaryVisualizer } from '@/components/bitstream/binary-visualizer';
 import { StructureTree } from '@/components/bitstream/structure-tree';
 import { ParameterSetViewer } from '@/components/bitstream/parameter-set-viewer';
 import { NALTimeline } from '@/components/bitstream/nal-timeline';
+import type { FfprobeStream } from 'fluent-ffmpeg';
 
 interface FileMetadata {
   fileId: string;
@@ -38,8 +39,8 @@ interface FileMetadata {
 }
 
 interface ProbeData {
-  format?: any;
-  streams?: any[];
+  format?: unknown;
+  streams?: FfprobeStream[];
 }
 
 interface BitstreamData {
@@ -95,7 +96,7 @@ export default function BitstreamPage() {
   const [activeTab, setActiveTab] = React.useState('hex');
 
   React.useEffect(() => {
-    loadData();
+    void loadData();
   }, [fileId]);
 
   const loadData = async () => {
@@ -130,7 +131,7 @@ export default function BitstreamPage() {
           setProbeData(probeResult.data);
           
           // Check if video stream exists
-          const videoStream = probeResult.data.streams?.find((s: any) => s.codec_type === 'video');
+          const videoStream = probeResult.data.streams?.find((s: FfprobeStream) => s.codec_type === 'video');
           if (videoStream) {
             // Load bitstream data
             await loadBitstream();
@@ -185,8 +186,8 @@ export default function BitstreamPage() {
   }
 
   // Get video codec info
-  const videoStream = probeData?.streams?.find((s: any) => s.codec_type === 'video');
-  const codecName = videoStream?.codec_name?.toLowerCase();
+  const videoStream = probeData?.streams?.find((s: FfprobeStream) => s.codec_type === 'video');
+  const codecName = (videoStream as FfprobeStream | undefined)?.codec_name?.toLowerCase();
   const isH264H265 = codecName && ['h264', 'hevc', 'h265'].includes(codecName);
 
   return (
@@ -218,7 +219,7 @@ export default function BitstreamPage() {
           <Alert className="bg-red-500/20 border-red-500/50 mb-6">
             <AlertCircle className="h-4 w-4" />
             <AlertTitle>Error</AlertTitle>
-            <AlertDescription>{error}</AlertDescription>
+            <AlertDescription>{error as React.ReactNode}</AlertDescription>
           </Alert>
         )}
 
@@ -235,11 +236,11 @@ export default function BitstreamPage() {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
                   <p className="text-sm text-gray-400 mb-1">Codec</p>
-                  <p className="text-white font-mono text-lg">{codecName?.toUpperCase() || 'Unknown'}</p>
+                  <p className="text-white font-mono text-lg">{codecName?.toUpperCase() ?? 'Unknown'}</p>
                 </div>
                 <div>
                   <p className="text-sm text-gray-400 mb-1">Codec Long Name</p>
-                  <p className="text-white font-mono text-sm">{videoStream.codec_long_name || 'Unknown'}</p>
+                  <p className="text-white font-mono text-sm">{(videoStream as FfprobeStream | undefined)?.codec_long_name ?? 'Unknown'}</p>
                 </div>
                 {isH264H265 ? (
                   <div className="md:col-span-2">
@@ -353,7 +354,7 @@ export default function BitstreamPage() {
                   ? 'No video stream found. Bitstream analysis is only available for video files.'
                   : 'Bitstream data is being extracted. Please wait...'}
               </p>
-              {videoStream && (
+              {(videoStream as FfprobeStream | undefined) && (
                 <Button
                   onClick={loadBitstream}
                   className="bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white"

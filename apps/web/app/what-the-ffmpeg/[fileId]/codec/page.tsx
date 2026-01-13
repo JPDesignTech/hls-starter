@@ -2,6 +2,7 @@
 
 import * as React from 'react';
 import { useParams } from 'next/navigation';
+import type { FfprobeData, FfprobeStream } from 'fluent-ffmpeg';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
@@ -30,10 +31,7 @@ interface FileMetadata {
   analysisStatus: string;
 }
 
-interface ProbeData {
-  format?: any;
-  streams?: any[];
-}
+type ProbeData = FfprobeData;
 
 export default function CodecPage() {
   const params = useParams();
@@ -45,7 +43,7 @@ export default function CodecPage() {
   const [error, setError] = React.useState<string | null>(null);
 
   React.useEffect(() => {
-    loadData();
+    void loadData();
   }, [fileId]);
 
   const loadData = async () => {
@@ -131,9 +129,9 @@ export default function CodecPage() {
     );
   }
 
-  const videoStreams = probeData?.streams?.filter((s: any) => s.codec_type === 'video') || [];
-  const audioStreams = probeData?.streams?.filter((s: any) => s.codec_type === 'audio') || [];
-  const otherStreams = probeData?.streams?.filter((s: any) => !['video', 'audio'].includes(s.codec_type)) || [];
+  const videoStreams = probeData?.streams?.filter((s: FfprobeStream) => s.codec_type === 'video') ?? [];
+  const audioStreams = probeData?.streams?.filter((s: FfprobeStream) => s.codec_type === 'audio') ?? [];
+  const otherStreams = probeData?.streams?.filter((s: FfprobeStream) => !['video', 'audio'].includes(s.codec_type ?? '')) ?? [];
 
   return (
     <div className="min-h-screen relative">
@@ -182,14 +180,14 @@ export default function CodecPage() {
             </CardHeader>
             <CardContent>
               <div className="space-y-4">
-                {videoStreams.map((stream: any, index: number) => {
-                  const compatibility = getCodecCompatibility(stream.codec_name || '', 'video');
+                {videoStreams.map((stream: FfprobeStream, index: number) => {
+                  const compatibility = getCodecCompatibility(stream.codec_name ?? '', 'video');
                   return (
                     <Card key={index} className="bg-black/30 border-white/10">
                       <CardHeader>
                         <div className="flex items-center justify-between">
                           <CardTitle className="text-white text-lg">
-                            Stream #{stream.index} - {stream.codec_name?.toUpperCase() || 'UNKNOWN'}
+                            Stream #{stream.index} - {stream.codec_name?.toUpperCase() ?? 'UNKNOWN'}
                           </CardTitle>
                           {compatibility.compatible ? (
                             <span className="px-2 py-1 bg-green-500/20 text-green-400 text-xs rounded">Compatible</span>
@@ -202,11 +200,11 @@ export default function CodecPage() {
                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                           <div>
                             <p className="text-sm text-gray-400 mb-1">Codec Name</p>
-                            <p className="text-white font-mono">{stream.codec_name || 'Unknown'}</p>
+                            <p className="text-white font-mono">{stream.codec_name ?? 'Unknown'}</p>
                           </div>
                           <div>
                             <p className="text-sm text-gray-400 mb-1">Codec Long Name</p>
-                            <p className="text-white font-mono text-sm">{stream.codec_long_name || 'Unknown'}</p>
+                            <p className="text-white font-mono text-sm">{stream.codec_long_name ?? 'Unknown'}</p>
                           </div>
                           {stream.profile && (
                             <div>
@@ -268,14 +266,14 @@ export default function CodecPage() {
             </CardHeader>
             <CardContent>
               <div className="space-y-4">
-                {audioStreams.map((stream: any, index: number) => {
-                  const compatibility = getCodecCompatibility(stream.codec_name || '', 'audio');
+                {audioStreams.map((stream: FfprobeStream, index: number) => {
+                  const compatibility = getCodecCompatibility(stream.codec_name ?? '', 'audio');
                   return (
                     <Card key={index} className="bg-black/30 border-white/10">
                       <CardHeader>
                         <div className="flex items-center justify-between">
                           <CardTitle className="text-white text-lg">
-                            Stream #{stream.index} - {stream.codec_name?.toUpperCase() || 'UNKNOWN'}
+                            Stream #{stream.index} - {stream.codec_name?.toUpperCase() ?? 'UNKNOWN'}
                           </CardTitle>
                           {compatibility.compatible ? (
                             <span className="px-2 py-1 bg-green-500/20 text-green-400 text-xs rounded">Compatible</span>
@@ -288,11 +286,11 @@ export default function CodecPage() {
                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                           <div>
                             <p className="text-sm text-gray-400 mb-1">Codec Name</p>
-                            <p className="text-white font-mono">{stream.codec_name || 'Unknown'}</p>
+                            <p className="text-white font-mono">{stream.codec_name ?? 'Unknown'}</p>
                           </div>
                           <div>
                             <p className="text-sm text-gray-400 mb-1">Codec Long Name</p>
-                            <p className="text-white font-mono text-sm">{stream.codec_long_name || 'Unknown'}</p>
+                            <p className="text-white font-mono text-sm">{stream.codec_long_name ?? 'Unknown'}</p>
                           </div>
                           {stream.sample_rate && (
                             <div>
@@ -351,22 +349,22 @@ export default function CodecPage() {
             </CardHeader>
             <CardContent>
               <div className="space-y-4">
-                {otherStreams.map((stream: any, index: number) => (
+                {otherStreams.map((stream: FfprobeStream, index: number) => (
                   <Card key={index} className="bg-black/30 border-white/10">
                     <CardHeader>
                       <CardTitle className="text-white text-lg">
-                        Stream #{stream.index} - {stream.codec_type?.toUpperCase() || 'UNKNOWN'}
+                        Stream #{stream.index} - {stream.codec_type?.toUpperCase() ?? 'UNKNOWN'}
                       </CardTitle>
                     </CardHeader>
                     <CardContent>
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div>
                           <p className="text-sm text-gray-400 mb-1">Codec Name</p>
-                          <p className="text-white font-mono">{stream.codec_name || 'Unknown'}</p>
+                          <p className="text-white font-mono">{stream.codec_name ?? 'Unknown'}</p>
                         </div>
                         <div>
                           <p className="text-sm text-gray-400 mb-1">Codec Long Name</p>
-                          <p className="text-white font-mono text-sm">{stream.codec_long_name || 'Unknown'}</p>
+                          <p className="text-white font-mono text-sm">{stream.codec_long_name ?? 'Unknown'}</p>
                         </div>
                       </div>
                     </CardContent>
@@ -378,7 +376,7 @@ export default function CodecPage() {
         )}
 
         {/* No Data Message */}
-        {(!probeData || !probeData.streams || probeData.streams.length === 0) && !loading && (
+        {(!probeData?.streams || probeData.streams.length === 0) && !loading && (
           <Card className="bg-white/10 backdrop-blur-lg border-white/20">
             <CardContent className="p-6 text-center">
               <p className="text-gray-300 mb-4">No codec data available</p>

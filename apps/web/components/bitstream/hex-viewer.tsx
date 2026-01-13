@@ -17,47 +17,54 @@ interface HexViewerProps {
   onOffsetClick?: (offset: number) => void;
 }
 
-export function HexViewer({ hexData, nalUnits = [], onOffsetClick }: HexViewerProps) {
+export function HexViewer({
+  hexData,
+  nalUnits = [],
+  onOffsetClick,
+}: HexViewerProps) {
   const [searchTerm, setSearchTerm] = React.useState('');
-  const [selectedOffset, setSelectedOffset] = React.useState<number | null>(null);
+  const [selectedOffset, setSelectedOffset] = React.useState<number | null>(
+    null
+  );
   const [bytesPerLine] = React.useState(16);
-  const [visibleRange, setVisibleRange] = React.useState({ start: 0, end: 1000 }); // Show first 1000 lines
+  const [visibleRange, setVisibleRange] = React.useState({
+    start: 0,
+    end: 1000,
+  }); // Show first 1000 lines
   const [isLoading, setIsLoading] = React.useState(false);
   const containerRef = React.useRef<HTMLDivElement>(null);
 
-  // Handle null/empty hexData
-  if (!hexData || hexData.length === 0) {
-    return (
-      <Card className="bg-white/15 border-white/20" style={{ isolation: 'isolate', contain: 'layout style paint' }}>
-        <CardContent className="p-6 text-center">
-          <p className="text-gray-300">No bitstream data available</p>
-        </CardContent>
-      </Card>
-    );
-  }
-
   // Calculate total bytes (don't convert all at once for large files)
-  const totalBytes = Math.floor(hexData.length / 2);
+  const totalBytes = Math.floor((hexData?.length ?? 0) / 2);
   const totalLines = Math.ceil(totalBytes / bytesPerLine);
-  
+
   // Warn if file is very large
   const isLargeFile = totalBytes > 1000000; // > 1MB
 
   // Convert hex to bytes on-demand (only for visible range)
-  const getBytesForRange = React.useCallback((startByte: number, endByte: number): number[] => {
-    const result: number[] = [];
-    const startHex = startByte * 2;
-    const endHex = Math.min(endByte * 2, hexData.length);
-    for (let i = startHex; i < endHex; i += 2) {
-      result.push(parseInt(hexData.substring(i, i + 2), 16));
-    }
-    return result;
-  }, [hexData]);
+  const getBytesForRange = React.useCallback(
+    (startByte: number, endByte: number): number[] => {
+      if (!hexData) return [];
+      const result: number[] = [];
+      const startHex = startByte * 2;
+      const endHex = Math.min(endByte * 2, hexData.length);
+      for (let i = startHex; i < endHex; i += 2) {
+        result.push(parseInt(hexData.substring(i, i + 2), 16));
+      }
+      return result;
+    },
+    [hexData]
+  );
 
   // Find NAL unit for a given offset
-  const getNALUnitForOffset = React.useCallback((offset: number) => {
-    return nalUnits.find(nal => offset >= nal.offset && offset < nal.offset + nal.size);
-  }, [nalUnits]);
+  const getNALUnitForOffset = React.useCallback(
+    (offset: number) => {
+      return nalUnits.find(
+        (nal) => offset >= nal.offset && offset < nal.offset + nal.size
+      );
+    },
+    [nalUnits]
+  );
 
   // Get color for NAL unit type
   const getNALColor = (type: number): string => {
@@ -68,7 +75,8 @@ export function HexViewer({ hexData, nalUnits = [], onOffsetClick }: HexViewerPr
     // VPS (H.265)
     if (type === 32) return 'bg-purple-500/20 border-purple-500/50';
     // IDR
-    if (type === 5 || type === 19 || type === 20) return 'bg-yellow-500/20 border-yellow-500/50';
+    if (type === 5 || type === 19 || type === 20)
+      return 'bg-yellow-500/20 border-yellow-500/50';
     // Other slices
     return 'bg-gray-500/10 border-gray-500/30';
   };
@@ -89,11 +97,11 @@ export function HexViewer({ hexData, nalUnits = [], onOffsetClick }: HexViewerPr
 
   // Copy to clipboard
   const copyToClipboard = () => {
-    navigator.clipboard.writeText(hexData);
+    void navigator.clipboard.writeText(hexData);
   };
 
   // Format bytes as hex
-  const formatHex = (value: number, length: number = 2): string => {
+  const formatHex = (value: number, length = 2): string => {
     return value.toString(16).toUpperCase().padStart(length, '0');
   };
 
@@ -107,8 +115,10 @@ export function HexViewer({ hexData, nalUnits = [], onOffsetClick }: HexViewerPr
     const lineBytes = getBytesForRange(lineStart, lineStart + bytesPerLine);
     const lineOffset = lineStart;
     const nalUnit = getNALUnitForOffset(lineOffset);
-    const isSelected = selectedOffset !== null && 
-      selectedOffset >= lineOffset && selectedOffset < lineOffset + bytesPerLine;
+    const isSelected =
+      selectedOffset !== null &&
+      selectedOffset >= lineOffset &&
+      selectedOffset < lineOffset + bytesPerLine;
     const isSearchMatch = searchResults.includes(lineOffset);
 
     return (
@@ -130,7 +140,7 @@ export function HexViewer({ hexData, nalUnits = [], onOffsetClick }: HexViewerPr
         <div className="text-gray-400 w-20 shrink-0">
           {formatHex(lineOffset, 8)}
         </div>
-        
+
         {/* Hex bytes */}
         <div className="flex gap-1 flex-wrap flex-1">
           {lineBytes.map((byte, idx) => {
@@ -138,15 +148,13 @@ export function HexViewer({ hexData, nalUnits = [], onOffsetClick }: HexViewerPr
             const byteNAL = getNALUnitForOffset(byteOffset);
             const isByteSelected = selectedOffset === byteOffset;
             const isByteSearchMatch = searchResults.includes(byteOffset);
-            
+
             return (
               <span
                 key={idx}
                 className={`${
                   isByteSelected ? 'bg-yellow-500/50 text-black' : ''
-                } ${
-                  isByteSearchMatch ? 'bg-orange-500/50' : ''
-                } ${
+                } ${isByteSearchMatch ? 'bg-orange-500/50' : ''} ${
                   byteNAL ? 'font-semibold' : ''
                 }`}
                 onClick={(e) => {
@@ -162,11 +170,15 @@ export function HexViewer({ hexData, nalUnits = [], onOffsetClick }: HexViewerPr
             );
           })}
           {/* Fill empty spaces */}
-          {Array.from({ length: bytesPerLine - lineBytes.length }).map((_, idx) => (
-            <span key={`empty-${idx}`} className="text-gray-600">  </span>
-          ))}
+          {Array.from({ length: bytesPerLine - lineBytes.length }).map(
+            (_, idx) => (
+              <span key={`empty-${idx}`} className="text-gray-600">
+                {' '}
+              </span>
+            )
+          )}
         </div>
-        
+
         {/* ASCII representation */}
         <div className="text-gray-400 w-16 shrink-0">
           {lineBytes.map((byte, idx) => {
@@ -187,38 +199,66 @@ export function HexViewer({ hexData, nalUnits = [], onOffsetClick }: HexViewerPr
   };
 
   // Handle scroll for pagination
-  const handleScroll = React.useCallback((e: React.UIEvent<HTMLDivElement>) => {
-    const target = e.currentTarget;
-    const scrollTop = target.scrollTop;
-    const scrollHeight = target.scrollHeight;
-    const clientHeight = target.clientHeight;
-    
-    // Calculate which lines are visible
-    const lineHeight = 24; // Approximate line height
-    const startLine = Math.max(0, Math.floor(scrollTop / lineHeight) - 50); // Buffer of 50 lines
-    const endLine = Math.min(totalLines, Math.ceil((scrollTop + clientHeight) / lineHeight) + 50);
-    
-    setVisibleRange({ start: startLine, end: endLine });
-  }, [totalLines]);
+  const handleScroll = React.useCallback(
+    (e: React.UIEvent<HTMLDivElement>) => {
+      const target = e.currentTarget;
+      const scrollTop = target.scrollTop;
+      const scrollHeight = target.scrollHeight;
+      const clientHeight = target.clientHeight;
+
+      // Calculate which lines are visible
+      const lineHeight = 24; // Approximate line height
+      const startLine = Math.max(0, Math.floor(scrollTop / lineHeight) - 50); // Buffer of 50 lines
+      const endLine = Math.min(
+        totalLines,
+        Math.ceil((scrollTop + clientHeight) / lineHeight) + 50
+      );
+
+      setVisibleRange({ start: startLine, end: endLine });
+    },
+    [totalLines]
+  );
 
   // Render visible lines only
   const visibleLines = React.useMemo(() => {
     const lines: number[] = [];
-    for (let i = visibleRange.start; i < visibleRange.end && i < totalLines; i++) {
+    for (
+      let i = visibleRange.start;
+      i < visibleRange.end && i < totalLines;
+      i++
+    ) {
       lines.push(i);
     }
     return lines;
   }, [visibleRange, totalLines]);
 
+  // Handle null/empty hexData (check after all hooks)
+  if (!hexData || hexData.length === 0) {
+    return (
+      <Card
+        className="bg-white/15 border-white/20"
+        style={{ isolation: 'isolate', contain: 'layout style paint' }}
+      >
+        <CardContent className="p-6 text-center">
+          <p className="text-gray-300">No bitstream data available</p>
+        </CardContent>
+      </Card>
+    );
+  }
+
   return (
-    <Card className="bg-white/15 border-white/20" style={{ isolation: 'isolate', contain: 'layout style paint' }}>
+    <Card
+      className="bg-white/15 border-white/20"
+      style={{ isolation: 'isolate', contain: 'layout style paint' }}
+    >
       <CardHeader>
         <div className="flex items-center justify-between">
           <CardTitle className="text-white">
             Hex Dump
             {isLargeFile && (
               <span className="ml-2 text-xs text-yellow-400">
-                (Large file: {Math.round(totalBytes / 1024 / 1024 * 10) / 10}MB - Showing first {visibleRange.end} lines)
+                (Large file: {Math.round((totalBytes / 1024 / 1024) * 10) / 10}
+                MB - Showing first {visibleRange.end} lines)
               </span>
             )}
           </CardTitle>
@@ -263,8 +303,10 @@ export function HexViewer({ hexData, nalUnits = [], onOffsetClick }: HexViewerPr
           <div className="mb-4 p-3 bg-yellow-500/20 border border-yellow-500/50 rounded text-sm text-yellow-200">
             <p className="font-semibold mb-1">Large File Detected</p>
             <p className="text-xs">
-              This file is very large ({Math.round(totalBytes / 1024 / 1024 * 10) / 10}MB). 
-              Only visible lines are rendered for performance. Use scroll to navigate, or search to jump to specific offsets.
+              This file is very large (
+              {Math.round((totalBytes / 1024 / 1024) * 10) / 10}MB). Only
+              visible lines are rendered for performance. Use scroll to
+              navigate, or search to jump to specific offsets.
             </p>
           </div>
         )}
@@ -281,26 +323,24 @@ export function HexViewer({ hexData, nalUnits = [], onOffsetClick }: HexViewerPr
               <div className="flex-1">Hex</div>
               <div className="w-16 shrink-0">ASCII</div>
             </div>
-            
+
             {/* Spacer for lines before visible range */}
             {visibleRange.start > 0 && (
               <div style={{ height: visibleRange.start * 24 }} />
             )}
-            
+
             {/* Hex lines - only render visible ones */}
-            {visibleLines.map((lineIdx) =>
-              <div key={lineIdx}>
-                {renderLine(lineIdx * bytesPerLine)}
-              </div>
-            )}
-            
+            {visibleLines.map((lineIdx) => (
+              <div key={lineIdx}>{renderLine(lineIdx * bytesPerLine)}</div>
+            ))}
+
             {/* Spacer for lines after visible range */}
             {visibleRange.end < totalLines && (
               <div style={{ height: (totalLines - visibleRange.end) * 24 }} />
             )}
           </div>
         </div>
-        
+
         {/* Legend */}
         {nalUnits.length > 0 && (
           <div className="mt-4 flex flex-wrap gap-4 text-xs">

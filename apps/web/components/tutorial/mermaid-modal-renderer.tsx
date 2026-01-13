@@ -111,12 +111,12 @@ export function MermaidModalRenderer({
       } catch (err) {
         console.error('Mermaid rendering error in modal:', err);
         const errorMessage = err instanceof Error ? err.message : 'Failed to render diagram';
-        setError(errorMessage || 'Unknown error occurred');
+        setError(errorMessage ?? 'Unknown error occurred');
         setIsRendered(false);
       }
     };
 
-    renderDiagram();
+    void renderDiagram();
   }, [diagram, type]);
 
   const handleCopy = async () => {

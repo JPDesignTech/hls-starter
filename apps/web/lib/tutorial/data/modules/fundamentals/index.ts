@@ -1,4 +1,4 @@
-import { Module } from '@/lib/tutorial/types';
+import { type Module } from '@/lib/tutorial/types';
 import { whatIsFFmpeg } from './what-is-ffmpeg';
 import { installationSetup } from './installation-setup';
 import { inputOutput } from './input-output';

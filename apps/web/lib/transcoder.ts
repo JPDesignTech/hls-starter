@@ -1,10 +1,11 @@
 import { TranscoderServiceClient } from '@google-cloud/video-transcoder';
+import { type ClientOptions } from 'google-gax';
 import { google } from '@google-cloud/video-transcoder/build/protos/protos';
 
 // Initialize the Transcoder client with proper configuration
 function getTranscoderClient() {
   try {
-    const config: any = {};
+    const config: ClientOptions = {};
 
     // Add project ID if available
     if (process.env.GCP_PROJECT_ID) {
@@ -13,27 +14,40 @@ function getTranscoderClient() {
 
     // SINGLE METHOD: GCP_SERVICE_ACCOUNT_KEY must be base64-encoded JSON
     // Works in ALL environments: local dev, preview, production
-    if (process.env.GCP_SERVICE_ACCOUNT_KEY && process.env.GCP_SERVICE_ACCOUNT_KEY.trim() !== '') {
+    if (
+      process.env.GCP_SERVICE_ACCOUNT_KEY &&
+      process.env.GCP_SERVICE_ACCOUNT_KEY.trim() !== ''
+    ) {
       try {
         const base64Content = process.env.GCP_SERVICE_ACCOUNT_KEY.trim();
         // Decode from base64
-        const jsonString = Buffer.from(base64Content, 'base64').toString('utf-8');
+        const jsonString = Buffer.from(base64Content, 'base64').toString(
+          'utf-8'
+        );
         // Parse the decoded JSON
         config.credentials = JSON.parse(jsonString);
-        console.log('[Transcoder] Using credentials from GCP_SERVICE_ACCOUNT_KEY (base64 decoded)');
+        console.log(
+          '[Transcoder] Using credentials from GCP_SERVICE_ACCOUNT_KEY (base64 decoded)'
+        );
       } catch (error) {
-        console.error('[Transcoder] Failed to decode/parse GCP_SERVICE_ACCOUNT_KEY:', error);
+        console.error(
+          '[Transcoder] Failed to decode/parse GCP_SERVICE_ACCOUNT_KEY:',
+          error
+        );
         throw new Error(
           'GCP_SERVICE_ACCOUNT_KEY must be base64-encoded JSON. ' +
-          'Encode your service account key with: base64 -i key.json\n' +
-          'Get your key from: https://console.cloud.google.com/iam-admin/serviceaccounts'
+            'Encode your service account key with: base64 -i key.json\n' +
+            'Get your key from: https://console.cloud.google.com/iam-admin/serviceaccounts'
         );
       }
     }
 
-    console.log('[Transcoder] Initializing client with project:', config.projectId);
+    console.log(
+      '[Transcoder] Initializing client with project:',
+      config.projectId
+    );
     console.log('[Transcoder] Has credentials:', !!config.credentials);
-    
+
     return new TranscoderServiceClient(config);
   } catch (error) {
     console.error('[Transcoder] Failed to initialize client:', error);
@@ -213,21 +227,21 @@ export async function createTranscodeJob({
   try {
     const transcoderClient = getTranscoderClient();
     console.log('[Transcoder] Submitting job to parent:', parent);
-    
+
     const [response] = await transcoderClient.createJob({
       parent,
       job,
     });
 
     console.log(`[Transcoder] Created transcoding job: ${response.name}`);
-    return response.name || '';
-  } catch (error: any) {
+    return response.name ?? '';
+  } catch (error: unknown) {
+    if (error instanceof Error) {
     console.error('[Transcoder] Failed to create job:', error);
     console.error('[Transcoder] Error details:', {
       message: error.message,
-      code: error.code,
-      details: error.details,
     });
+  }
     throw error;
   }
 }
@@ -254,15 +268,24 @@ export async function getTranscodeJobStatus(jobName: string): Promise<{
   // Convert ProcessingState enum to string
   const ProcessingState = google.cloud.video.transcoder.v1.Job.ProcessingState;
   let stateString = 'UNKNOWN';
-  
+
   // Handle the state more robustly
   if (job.state !== undefined && job.state !== null) {
     // Check for PENDING state (might be represented as PROCESSING_STATE_UNSPECIFIED)
-    if (job.state === ProcessingState.PROCESSING_STATE_UNSPECIFIED || job.state === 'PENDING') {
+    if (
+      job.state === ProcessingState.PROCESSING_STATE_UNSPECIFIED ||
+      job.state === 'PENDING'
+    ) {
       stateString = 'PENDING';
-    } else if (job.state === ProcessingState.RUNNING || job.state === 'RUNNING') {
+    } else if (
+      job.state === ProcessingState.RUNNING ||
+      job.state === 'RUNNING'
+    ) {
       stateString = 'RUNNING';
-    } else if (job.state === ProcessingState.SUCCEEDED || job.state === 'SUCCEEDED') {
+    } else if (
+      job.state === ProcessingState.SUCCEEDED ||
+      job.state === 'SUCCEEDED'
+    ) {
       stateString = 'SUCCEEDED';
     } else if (job.state === ProcessingState.FAILED || job.state === 'FAILED') {
       stateString = 'FAILED';
@@ -275,20 +298,20 @@ export async function getTranscodeJobStatus(jobName: string): Promise<{
 
   return {
     state: stateString,
-    error: job.error?.message || undefined,
+    error: job.error?.message ?? undefined,
     progress: undefined, // Progress tracking not directly available in the API
   };
 }
 
 export async function waitForTranscodeJob(
   jobName: string,
-  maxWaitTime: number = 300000 // 5 minutes
+  maxWaitTime = 300000 // 5 minutes
 ): Promise<boolean> {
   const startTime = Date.now();
 
   while (Date.now() - startTime < maxWaitTime) {
     const status = await getTranscodeJobStatus(jobName);
-    
+
     console.log(`Job ${jobName} status: ${status.state}`);
 
     if (status.state === 'SUCCEEDED') {
@@ -299,7 +322,7 @@ export async function waitForTranscodeJob(
     }
 
     // Wait 5 seconds before checking again
-    await new Promise(resolve => setTimeout(resolve, 5000));
+    await new Promise((resolve) => setTimeout(resolve, 5000));
   }
 
   console.error('Transcoding job timed out');

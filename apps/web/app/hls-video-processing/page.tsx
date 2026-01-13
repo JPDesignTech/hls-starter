@@ -100,7 +100,7 @@ export default function HLSVideoProcessingPage() {
                 });
               } else if (data.status === 'processing') {
                 // Update progress during processing
-                let newProgress = data.progress || video.progress || 50;
+                let newProgress = data.progress ?? video.progress ?? 50;
                 
                 // If we're stuck at 50% and have a processingState, increment slowly
                 if (newProgress === 50 && data.processingState === 'RUNNING' && video.progress >= 50) {
@@ -124,7 +124,7 @@ export default function HLSVideoProcessingPage() {
                   if (currentVideo?.status !== 'error') {
                     return prev.map(v => 
                       v.id === video.id 
-                        ? { ...v, status: 'error', error: data.error || 'Processing failed' } 
+                        ? { ...v, status: 'error', error: data.error ?? 'Processing failed' } 
                         : v
                     );
                   }
@@ -142,8 +142,8 @@ export default function HLSVideoProcessingPage() {
     // Only run if there are videos being processed
     const hasProcessingVideos = videos.some(v => v.status === 'processing');
     if (hasProcessingVideos) {
-      checkVideoStatus();
-      const interval = setInterval(checkVideoStatus, 10000); // Check every 10 seconds
+      void checkVideoStatus();
+      const interval = setInterval(() => { void checkVideoStatus(); }, 10000); // Check every 10 seconds
       return () => clearInterval(interval);
     }
   }, [videos]);
@@ -171,7 +171,7 @@ export default function HLSVideoProcessingPage() {
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (file && file.type.startsWith('video/')) {
+    if (file?.type.startsWith('video/')) {
       setSelectedFile(file);
     }
   };
@@ -322,7 +322,7 @@ export default function HLSVideoProcessingPage() {
       {/* Override purple background with purple/pink theme */}
       <div className="fixed inset-0 bg-gradient-to-br from-gray-900 via-purple-900 to-pink-900 animate-gradient -z-10" />
       <div className="fixed inset-0 bg-gradient-to-t from-black/50 via-transparent to-transparent pointer-events-none -z-10" />
-      
+
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12 relative z-0">
         {/* Header */}
         <div className="mb-12">
@@ -341,8 +341,9 @@ export default function HLSVideoProcessingPage() {
               </h1>
             </div>
             <p className="text-lg text-gray-300 max-w-2xl mx-auto">
-              Upload your video to generate HLS playlists with adaptive bitrate streaming, 
-              or analyze existing HLS playlists with deep segment inspection and quality level analysis.
+              Upload your video to generate HLS playlists with adaptive bitrate
+              streaming, or analyze existing HLS playlists with deep segment
+              inspection and quality level analysis.
             </p>
             <div className="max-w-3xl mx-auto mt-6">
               <HlsSpecTips />
@@ -380,14 +381,21 @@ export default function HLSVideoProcessingPage() {
         </div>
 
         {/* Upload Section */}
-        <Card className="mb-8 bg-white/15 border-white/20 min-h-[300px]" style={{ isolation: 'isolate', contain: 'layout style paint' }}>
+        <Card
+          className="mb-8 bg-white/15 border-white/20 min-h-[300px]"
+          style={{ isolation: 'isolate', contain: 'layout style paint' }}
+        >
           <CardHeader>
             <CardTitle className="text-white">
-              {selectedMethod === 'hls' ? 'Analyze HLS Playlist' : 'Upload Video'}
+              {selectedMethod === 'hls'
+                ? 'Analyze HLS Playlist'
+                : 'Upload Video'}
             </CardTitle>
             <CardDescription className="text-gray-300">
-              {selectedMethod === 'direct' && 'Upload directly to cloud storage for best performance'}
-              {selectedMethod === 'hls' && 'Enter an HLS playlist URL to analyze segments, quality levels, and configurations'}
+              {selectedMethod === 'direct' &&
+                'Upload directly to cloud storage for best performance'}
+              {selectedMethod === 'hls' &&
+                'Enter an HLS playlist URL to analyze segments, quality levels, and configurations'}
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -399,47 +407,50 @@ export default function HLSVideoProcessingPage() {
                 onChange={(e) => setAutoAnalyze(e.target.checked)}
                 className="rounded border-gray-300"
               />
-              <Label htmlFor="auto-analyze" className="text-white cursor-pointer">
+              <Label
+                htmlFor="auto-analyze"
+                className="text-white cursor-pointer"
+              >
                 Automatically open HLS analyzer after upload
               </Label>
             </div>
-            
+
             {selectedMethod === 'direct' && (
-              <DirectUpload 
+              <DirectUpload
                 onUploadComplete={async (videoId, filename) => {
                   console.log('Direct upload complete:', { videoId, filename });
-                  
+
                   try {
-                  // Trigger processing after direct upload
+                    // Trigger processing after direct upload
                     const response = await fetch('/api/process', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ 
-                      videoId, 
-                      gcsPath: filename 
-                    }),
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({
+                        videoId,
+                        gcsPath: filename,
+                      }),
                     });
-                    
+
                     if (!response.ok) {
                       const errorText = await response.text();
                       console.error('Process API error:', errorText);
                       throw new Error(`Processing failed: ${response.status}`);
                     }
-                    
+
                     const result = await response.json();
                     console.log('Process API result:', result);
-                    
+
                     if (result.url) {
                       updateVideo(videoId, {
                         status: 'ready',
                         url: result.url,
                         progress: 100,
                       });
-                      
+
                       // Navigate to analyzer if auto-analyze is enabled
                       if (autoAnalyze) {
                         router.push(`/video/${videoId}/analyze`);
-                    }
+                      }
                     } else {
                       throw new Error('No URL returned from processing');
                     }
@@ -447,19 +458,26 @@ export default function HLSVideoProcessingPage() {
                     console.error('Error processing video:', error);
                     updateVideo(videoId, {
                       status: 'error',
-                      error: error instanceof Error ? error.message : 'Processing failed',
+                      error:
+                        error instanceof Error
+                          ? error.message
+                          : 'Processing failed',
                     });
                   }
                 }}
-                onVideoAdded={addVideo}
-                onVideoUpdated={updateVideo}
+                onVideoAdded={(video: unknown) => addVideo(video as VideoInfo)}
+                onVideoUpdated={(videoId: string, updates: unknown) =>
+                  updateVideo(videoId, updates as Partial<VideoInfo>)
+                }
               />
             )}
-            
+
             {selectedMethod === 'hls' && (
               <div className="space-y-4">
                 <div>
-                  <Label htmlFor="hls-url" className="text-white">HLS Playlist URL</Label>
+                  <Label htmlFor="hls-url" className="text-white">
+                    HLS Playlist URL
+                  </Label>
                   <Input
                     id="hls-url"
                     type="url"
@@ -469,38 +487,57 @@ export default function HLSVideoProcessingPage() {
                     className="bg-white/10 border-white/20 text-white placeholder:text-gray-400 hover:bg-white/20 transition-colors"
                   />
                   <p className="text-xs text-gray-400 mt-2">
-                    Enter a valid HLS playlist URL (.m3u8 file). Works with both relative and absolute segment URLs.
+                    Enter a valid HLS playlist URL (.m3u8 file). Works with both
+                    relative and absolute segment URLs.
                   </p>
                 </div>
 
                 {/* Example URLs */}
                 <div className="space-y-2">
-                  <p className="text-xs text-gray-400">Try these example HLS playlists:</p>
+                  <p className="text-xs text-gray-400">
+                    Try these example HLS playlists:
+                  </p>
                   <div className="flex flex-wrap gap-2">
                     <button
                       type="button"
-                      onClick={() => setHlsUrl('https://devstreaming-cdn.apple.com/videos/streaming/examples/adv_dv_atmos/main.m3u8')}
+                      onClick={() =>
+                        setHlsUrl(
+                          'https://devstreaming-cdn.apple.com/videos/streaming/examples/adv_dv_atmos/main.m3u8'
+                        )
+                      }
                       className="text-xs px-2 py-1 bg-white/10 hover:bg-white/20 rounded text-purple-300 transition-colors"
                     >
                       Advanced (fMP4)
                     </button>
                     <button
                       type="button"
-                      onClick={() => setHlsUrl('https://devstreaming-cdn.apple.com/videos/streaming/examples/img_bipbop_adv_example_ts/master.m3u8')}
+                      onClick={() =>
+                        setHlsUrl(
+                          'https://devstreaming-cdn.apple.com/videos/streaming/examples/img_bipbop_adv_example_ts/master.m3u8'
+                        )
+                      }
                       className="text-xs px-2 py-1 bg-white/10 hover:bg-white/20 rounded text-purple-300 transition-colors"
                     >
                       Advanced (TS)
                     </button>
                     <button
                       type="button"
-                      onClick={() => setHlsUrl('https://devstreaming-cdn.apple.com/videos/streaming/examples/bipbop_4x3/bipbop_4x3_variant.m3u8')}
+                      onClick={() =>
+                        setHlsUrl(
+                          'https://devstreaming-cdn.apple.com/videos/streaming/examples/bipbop_4x3/bipbop_4x3_variant.m3u8'
+                        )
+                      }
                       className="text-xs px-2 py-1 bg-white/10 hover:bg-white/20 rounded text-purple-300 transition-colors"
                     >
                       Basic 4:3 Playlist
                     </button>
                     <button
                       type="button"
-                      onClick={() => setHlsUrl('https://devstreaming-cdn.apple.com/videos/streaming/examples/bipbop_16x9/bipbop_16x9_variant.m3u8')}
+                      onClick={() =>
+                        setHlsUrl(
+                          'https://devstreaming-cdn.apple.com/videos/streaming/examples/bipbop_16x9/bipbop_16x9_variant.m3u8'
+                        )
+                      }
                       className="text-xs px-2 py-1 bg-white/10 hover:bg-white/20 rounded text-purple-300 transition-colors"
                     >
                       Basic 16:9 Playlist
@@ -524,7 +561,9 @@ export default function HLSVideoProcessingPage() {
         {/* Videos List */}
         {videos.length > 0 && (
           <div className="mb-6 flex items-center justify-between">
-            <h2 className="text-2xl font-semibold text-white">Upload History</h2>
+            <h2 className="text-2xl font-semibold text-white">
+              Upload History
+            </h2>
             <Button
               onClick={clearAllVideos}
               variant="ghost"
@@ -535,27 +574,37 @@ export default function HLSVideoProcessingPage() {
             </Button>
           </div>
         )}
-        
+
         <div className="space-y-6">
-          {videos.map(video => (
-            <Card key={video.id} className="bg-white/15 border-white/20" style={{ isolation: 'isolate', contain: 'layout style paint' }}>
+          {videos.map((video) => (
+            <Card
+              key={video.id}
+              className="bg-white/15 border-white/20"
+              style={{ isolation: 'isolate', contain: 'layout style paint' }}
+            >
               <CardHeader>
                 <div className="flex items-center justify-between">
                   <div className="flex items-center space-x-3">
                     <Video className="h-5 w-5 text-purple-400" />
-                    <CardTitle className="text-lg text-white">{video.title}</CardTitle>
+                    <CardTitle className="text-lg text-white">
+                      {video.title}
+                    </CardTitle>
                   </div>
                   <div className="flex items-center space-x-2">
                     {video.status === 'uploading' && (
                       <>
                         <Loader2 className="h-4 w-4 animate-spin text-blue-400" />
-                        <span className="text-sm text-blue-400">Uploading...</span>
+                        <span className="text-sm text-blue-400">
+                          Uploading...
+                        </span>
                       </>
                     )}
                     {video.status === 'processing' && (
                       <>
                         <Loader2 className="h-4 w-4 animate-spin text-yellow-400" />
-                        <span className="text-sm text-yellow-400">Processing...</span>
+                        <span className="text-sm text-yellow-400">
+                          Processing...
+                        </span>
                       </>
                     )}
                     {video.status === 'ready' && (
@@ -582,17 +631,29 @@ export default function HLSVideoProcessingPage() {
                 </div>
               </CardHeader>
               <CardContent>
-                {(video.status === 'uploading' || video.status === 'processing') && (
+                {(video.status === 'uploading' ||
+                  video.status === 'processing') && (
                   <div className="mb-4">
                     <Progress value={video.progress} className="mb-2" />
                     <div className="flex justify-between text-sm">
                       <span className="text-gray-300">
-                        {video.status === 'uploading' ? 'Uploading' : 'Processing'} video...
-                        {video.status === 'processing' && video.progress > 50 && video.progress < 100 && (
-                          <span className="text-xs text-gray-400 ml-2">
-                            ({video.progress < 60 ? 'Initializing' : video.progress < 90 ? 'Transcoding' : 'Finalizing'})
-                          </span>
-                        )}
+                        {video.status === 'uploading'
+                          ? 'Uploading'
+                          : 'Processing'}{' '}
+                        video...
+                        {video.status === 'processing' &&
+                          video.progress > 50 &&
+                          video.progress < 100 && (
+                            <span className="text-xs text-gray-400 ml-2">
+                              (
+                              {video.progress < 60
+                                ? 'Initializing'
+                                : video.progress < 90
+                                  ? 'Transcoding'
+                                  : 'Finalizing'}
+                              )
+                            </span>
+                          )}
                       </span>
                       <span className="text-yellow-400 font-semibold">
                         {Math.round(video.progress)}%
@@ -600,7 +661,7 @@ export default function HLSVideoProcessingPage() {
                     </div>
                   </div>
                 )}
-                
+
                 {video.status === 'error' && (
                   <div className="p-4 bg-red-500/20 text-red-300 rounded-lg border border-red-500/30">
                     <p className="text-sm">{video.error}</p>
@@ -609,15 +670,21 @@ export default function HLSVideoProcessingPage() {
 
                 {video.status === 'ready' && video.url && (
                   <>
-                  <VideoPlayer
-                    src={video.url}
-                    className="w-full aspect-video"
-                    onQualityChange={(quality) => {
-                      console.log(`Video ${video.id} quality changed to:`, quality);
-                    }}
-                  />
+                    <VideoPlayer
+                      src={video.url}
+                      className="w-full aspect-video"
+                      onQualityChange={(quality) => {
+                        console.log(
+                          `Video ${video.id} quality changed to:`,
+                          quality
+                        );
+                      }}
+                    />
                     <div className="mt-4 flex gap-3">
-                      <Link href={`/video/${video.id}/analyze`} className="flex-1">
+                      <Link
+                        href={`/video/${video.id}/analyze`}
+                        className="flex-1"
+                      >
                         <Button className="w-full bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700">
                           <BarChart3 className="mr-2 h-4 w-4" />
                           Analyze HLS Output
@@ -633,7 +700,10 @@ export default function HLSVideoProcessingPage() {
 
         {/* Empty State */}
         {videos.length === 0 && (
-          <Card className="mt-8 bg-white/15 border-white/20" style={{ isolation: 'isolate', contain: 'layout style paint' }}>
+          <Card
+            className="mt-8 bg-white/15 border-white/20"
+            style={{ isolation: 'isolate', contain: 'layout style paint' }}
+          >
             <CardContent className="pt-6">
               <div className="text-center py-12">
                 <Video className="mx-auto h-12 w-12 text-purple-400 mb-4" />
@@ -641,8 +711,9 @@ export default function HLSVideoProcessingPage() {
                   No videos uploaded yet
                 </h3>
                 <p className="text-sm text-gray-300 max-w-md mx-auto">
-                  Choose an upload method above and upload a video file to get started. 
-                  BeemMeUp will generate HLS playlists with multiple quality levels and provide detailed analysis tools.
+                  Choose an upload method above and upload a video file to get
+                  started. BeemMeUp will generate HLS playlists with multiple
+                  quality levels and provide detailed analysis tools.
                 </p>
               </div>
             </CardContent>

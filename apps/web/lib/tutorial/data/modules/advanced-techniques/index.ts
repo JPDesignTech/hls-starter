@@ -1,4 +1,4 @@
-import { Module } from '@/lib/tutorial/types';
+import { type Module } from '@/lib/tutorial/types';
 import { complexFilterGraphs } from './complex-filter-graphs';
 import { multipleInputProcessing } from './multiple-input-processing';
 import { advancedAudioFiltering } from './advanced-audio-filtering';

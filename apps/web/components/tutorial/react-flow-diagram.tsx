@@ -3,13 +3,14 @@
 import * as React from 'react';
 import ReactFlow, {
   Background,
-  Node,
-  Edge,
+  type Node,
+  type Edge,
   ConnectionMode,
   MarkerType,
   BackgroundVariant,
   Handle,
   Position,
+  type ReactFlowInstance,
 } from 'reactflow';
 import 'reactflow/dist/style.css';
 import { Copy, Check, ZoomIn, ZoomOut, AlertCircle, Maximize2 } from 'lucide-react';
@@ -75,7 +76,7 @@ export function ReactFlowDiagram({
   const [error, setError] = React.useState<string | null>(null);
   const [isModalOpen, setIsModalOpen] = React.useState(false);
   const reactFlowWrapper = React.useRef<HTMLDivElement>(null);
-  const [reactFlowInstance, setReactFlowInstance] = React.useState<any>(null);
+  const [reactFlowInstance, setReactFlowInstance] = React.useState<ReactFlowInstance | null>(null);
 
   // Validate nodes and edges
   React.useEffect(() => {
@@ -109,7 +110,7 @@ export function ReactFlowDiagram({
     }
   };
 
-  const onInit = (instance: any) => {
+  const onInit = (instance: ReactFlowInstance) => {
     setReactFlowInstance(instance);
     // Fit view to show all nodes
     setTimeout(() => {
@@ -130,8 +131,8 @@ export function ReactFlowDiagram({
   const processedNodes = React.useMemo(() => {
     return nodes.map((node) => ({
       ...node,
-      style: node.style || defaultNodeStyle,
-      type: node.type || 'default',
+      style: node.style ?? defaultNodeStyle,
+      type: node.type ?? 'default',
     }));
   }, [nodes]);
 
@@ -139,10 +140,10 @@ export function ReactFlowDiagram({
   const processedEdges = React.useMemo(() => {
     return edges.map((edge) => ({
       ...edge,
-      type: edge.type || 'default',
-      animated: edge.animated || false,
-      style: edge.style || { stroke: '#6366f1', strokeWidth: 2 },
-      markerEnd: edge.markerEnd || {
+      type: edge.type ?? 'default',
+      animated: edge.animated ?? false,
+      style: edge.style ?? { stroke: '#6366f1', strokeWidth: 2 },
+      markerEnd: edge.markerEnd ?? {
         type: MarkerType.ArrowClosed,
         color: '#6366f1',
       },

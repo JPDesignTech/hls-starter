@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { type NextRequest, NextResponse } from 'next/server';
 import { kv } from '@/lib/redis';
 import { isGoogleCloudStorageConfigured } from '@/lib/storage';
 import { createTranscodeJob, waitForTranscodeJob } from '@/lib/transcoder';
