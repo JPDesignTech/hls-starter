@@ -226,13 +226,55 @@ graph LR
 ## 📋 Prerequisites
 
 - Node.js 18.17.0 or later
-- pnpm (recommended) or npm/yarn
+- pnpm 9.15.0 or later (required for monorepo)
 - Google Cloud Platform account with:
   - Cloud Storage bucket configured
   - Transcoder API enabled
   - Cloud Run service deployed (for FFprobe)
   - Service account with appropriate permissions
 - Upstash Redis account (optional - for persistent storage)
+
+## 🏢 Monorepo Structure
+
+This project uses a monorepo architecture with pnpm workspaces and Turborepo:
+
+```
+hls-starter/
+├── apps/
+│   └── web/                 # Main Next.js application
+│       ├── app/             # Next.js app router
+│       ├── components/      # React components
+│       ├── lib/             # Utilities and configs
+│       └── package.json     # App-specific dependencies
+├── packages/                # Shared packages (future)
+├── pnpm-workspace.yaml     # Workspace configuration
+├── turbo.json              # Turborepo pipeline config
+├── .eslintrc.cjs           # Shared ESLint config
+├── .prettierrc             # Shared Prettier config
+└── package.json            # Root workspace scripts
+```
+
+### Workspace Commands
+
+All commands are run from the root directory:
+
+```bash
+# Development
+pnpm dev              # Start Next.js dev server
+pnpm build            # Build for production
+pnpm start            # Start production server
+
+# Code Quality
+pnpm lint             # Run ESLint (strict type-checking)
+pnpm typecheck        # Run TypeScript compiler checks
+pnpm format:check     # Check code formatting
+pnpm format:write     # Auto-format all files
+
+# Turborepo (cached builds)
+pnpm turbo:build      # Build with Turbo caching
+pnpm turbo:lint       # Lint with Turbo caching
+pnpm turbo:type-check # Type-check with Turbo caching
+```
 
 ## 🚀 Installation
 
@@ -245,6 +287,11 @@ graph LR
 2. Install dependencies:
    ```bash
    pnpm install
+   ```
+   
+   **Note**: This project uses pnpm workspaces. If you don't have pnpm installed:
+   ```bash
+   npm install -g pnpm@9.15.0
    ```
 
 3. Set up Google Cloud Platform:
@@ -291,31 +338,39 @@ graph LR
 
 ```
 hls-starter/
-├── app/
-│   ├── api/
-│   │   ├── upload/         # Video upload endpoints
-│   │   ├── process/        # Transcoding initiation
-│   │   ├── hls-proxy/      # HLS playlist proxy
-│   │   ├── corruption-check/ # Video corruption detection endpoint
-│   │   └── video/          # Video status and analysis
-│   ├── video/[id]/analyze/ # HLS analyzer interface
-│   ├── corruption-check/   # Video corruption checker interface
-│   └── page.tsx            # Main upload interface
-├── components/
-│   ├── video-player.tsx    # HLS.js video player
-│   ├── direct-upload.tsx   # GCS direct upload
-│   ├── chunked-upload.tsx  # Chunked upload handler
-│   └── ui/                 # shadcn/ui components
-├── lib/
-│   ├── transcoder.ts       # Google Transcoder API client
-│   ├── storage.ts          # Google Cloud Storage utilities
-│   ├── redis.ts            # Upstash Redis client
-│   └── gcs-config.ts       # GCS configuration
-├── cloud-run-ffprobe/      # FFprobe analysis service
-│   ├── server.js           # Express server
-│   ├── Dockerfile          # Container configuration
-│   └── deploy.sh           # Deployment script
-└── public/                 # Static assets
+├── apps/
+│   └── web/
+│       ├── app/
+│       │   ├── api/
+│       │   │   ├── upload/         # Video upload endpoints
+│       │   │   ├── process/        # Transcoding initiation
+│       │   │   ├── hls-proxy/      # HLS playlist proxy
+│       │   │   ├── corruption-check/ # Video corruption detection endpoint
+│       │   │   └── video/          # Video status and analysis
+│       │   ├── video/[id]/analyze/ # HLS analyzer interface
+│       │   ├── corruption-check/   # Video corruption checker interface
+│       │   └── page.tsx            # Main upload interface
+│       ├── components/
+│       │   ├── video-player.tsx    # HLS.js video player
+│       │   ├── direct-upload.tsx   # GCS direct upload
+│       │   ├── chunked-upload.tsx  # Chunked upload handler
+│       │   └── ui/                 # shadcn/ui components
+│       ├── lib/
+│       │   ├── transcoder.ts       # Google Transcoder API client
+│       │   ├── storage.ts          # Google Cloud Storage utilities
+│       │   ├── redis.ts            # Upstash Redis client
+│       │   └── gcs-config.ts       # GCS configuration
+│       └── package.json            # Web app dependencies
+├── cloud-run-ffprobe/              # FFprobe analysis service
+│   ├── server.js                   # Express server
+│   ├── Dockerfile                  # Container configuration
+│   └── deploy.sh                   # Deployment script
+├── packages/                        # Shared packages (future)
+├── pnpm-workspace.yaml             # Workspace configuration
+├── turbo.json                      # Turborepo task pipeline
+├── .eslintrc.cjs                   # Root ESLint config
+├── prettier.config.js              # Root Prettier config
+└── tsconfig.base.json              # Base TypeScript config
 ```
 
 ## 🔄 How It Works
@@ -703,6 +758,44 @@ MIT
 4. Push to the branch (`git push origin feature/amazing-feature`)
 5. Open a Pull Request
 
+## 🛠️ Development Tools
+
+### Code Quality & Formatting
+
+This project enforces strict code quality standards:
+
+- **ESLint**: Type-checked linting with TypeScript-ESLint
+  - Strict type checking enabled
+  - Consistent import styles enforced
+  - Unused variable warnings
+  
+- **Prettier**: Automatic code formatting
+  - Single quotes, semicolons, 80 char width
+  - Tailwind CSS class sorting
+  
+- **Husky**: Pre-commit hooks (powered by Turborepo)
+  - Formatting checks before commit (cached)
+  - Linting checks before commit (cached)
+  - Prevents bad code from entering the repo
+  - Fast subsequent checks thanks to Turbo caching
+
+### Turborepo Caching
+
+Turborepo caches task outputs to speed up repeated builds:
+
+- Build outputs are cached in `.turbo/`
+- Subsequent builds only rebuild changed packages
+- 3-10x faster builds in monorepo scenarios
+
+### Adding New Packages
+
+To add a new package to the monorepo:
+
+1. Create `packages/your-package/` directory
+2. Add `package.json` with name `@hls-starter/your-package`
+3. Update `pnpm-workspace.yaml` if needed
+4. Run `pnpm install` to link workspace packages
+
 ## 📚 Resources
 
 - [Google Cloud Transcoder Documentation](https://cloud.google.com/transcoder/docs)
@@ -710,6 +803,8 @@ MIT
 - [Google Cloud Storage Best Practices](https://cloud.google.com/storage/docs/best-practices)
 - [hls.js Documentation](https://github.com/video-dev/hls.js/tree/master/docs)
 - [Adaptive Bitrate Streaming Guide](https://developer.apple.com/documentation/http_live_streaming)
+- [Turborepo Documentation](https://turbo.build/repo/docs)
+- [pnpm Workspaces](https://pnpm.io/workspaces)
 
 ## 🙏 Acknowledgments
 
