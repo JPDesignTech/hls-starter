@@ -1,0 +1,30 @@
+# Compiled output
+dist/
+build/
+
+# Dependencies
+node_modules/
+
+# Electron Forge
+out/
+
+# FFmpeg binaries (too large for git - download separately)
+resources/ffmpeg/darwin-arm64/ffmpeg
+resources/ffmpeg/darwin-arm64/ffprobe
+resources/ffmpeg/darwin-x64/ffmpeg
+resources/ffmpeg/darwin-x64/ffprobe
+resources/ffmpeg/win32-x64/ffmpeg.exe
+resources/ffmpeg/win32-x64/ffprobe.exe
+
+# Environment variables
+.env
+.env.local
+.env.*.local
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+npm-debug.log*

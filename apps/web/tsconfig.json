@@ -10,6 +10,7 @@
   },
   "include": [
     "next-env.d.ts",
+    "types/desktop.d.ts",
     "**/*.ts",
     "**/*.tsx",
     ".next/types/**/*.ts"
